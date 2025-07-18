@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CPAPaperFacts",
+  "description": "Schema capturing metadata about scientific papers discussing cryoprotective agents and factual statements extracted for each agent.",
+  "type": "object",
+  "properties": {
+    "paper_id": {
+      "type": "string",
+      "description": "Primary identifier for the paper. Prefer DOI; if not available, use alternative e.g. arXiv ID or internal UUID.",
+      "oneOf": [
+        {
+          "pattern": "^10\\.\\d{4,9}/[-._;()/:A-Z0-9]+$",
+          "description": "DOI pattern"
+        },
+        {
+          "pattern": "^(arXiv:)?\\d{4}\\.\\d{4,5}(v\\d+)?$",
+          "description": "arXiv identifier"
+        },
+        {
+          "format": "uuid",
+          "description": "Internal UUID"
+        }
+      ]
+    },
+    "title": {
+      "type": "string",
+      "description": "Full title of the paper"
+    },
+    "link": {
+      "type": "string",
+      "description": "A resolvable URL to the paper or its abstract",
+      "format": "uri"
+    },
+    "cpaFacts": {
+      "type": "array",
+      "description": "List of cryoprotective-agent-specific facts extracted from the paper.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fact_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this fact instance."
+          },
+          "agent_id": {
+            "type": "string",
+            "description": "Primary identifier for the cryoprotective agent; use standard InChIKey when available, otherwise a canonical chemical name or internal UUID."
+          },
+          "agent_label": {
+            "type": "string",
+            "description": "Human-readable name of the agent (e.g., glycerol)."
+          },
+          "fact_type": {
+            "type": "string",
+            "description": "Identifier for the type of fact, constrained to a controlled vocabulary.",
+            "enum": [
+              "MOLECULAR_MASS",
+              "SOLUBILITY",
+              "VISCOSITY",
+              "CNV",
+              "TG_PRIME",
+              "PARTITION_COEFFICIENT",
+              "DIELECTRIC_CONSTANT",
+              "THERMAL_CONDUCTIVITY",
+              "HEAT_CAPACITY",
+              "THERMAL_EXPANSION_COEFFICIENT",
+              "CRYSTALLIZATION_TEMPERATURE",
+              "DIFFUSION_COEFFICIENT",
+              "HYDROGEN_BOND_DONORS_ACCEPTORS",
+              "SOURCE_OF_COMPOUND",
+              "GRAS_CERTIFICATION",
+              "MELTING_POINT",
+              "HYDROPHOBICITY",
+              "DENSITY",
+              "REFRACTIVE_INDEX",
+              "SURFACE_TENSION",
+              "PH",
+              "OSMOLALITY_OSMOLARITY",
+              "POLAR_SURFACE_AREA"
+            ]
+          },
+          "value": {
+            "oneOf": [
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "object" }
+            ],
+            "description": "The value associated with the fact. Numeric when possible."
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit of measurement when applicable. Recommended defaults and alternatives are defined in the top-level definitions.factUnitDefaults object."
+          },
+          "quote": {
+            "type": "string",
+            "description": "Exact excerpt from the paper supporting the fact."
+          }
+        },
+        "required": ["fact_instance_id", "agent_id", "fact_type", "value", "quote"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["paper_id", "title", "cpaFacts"],
+  "additionalProperties": false,
+  "definitions": {
+    "factUnitDefaults": {
+      "type": "object",
+      "description": "Recommended units and default unit for each fact_type.",
+      "additionalProperties": false,
+      "properties": {
+        "MOLECULAR_MASS": { "defaultUnit": "g/mol", "units": ["g/mol", "Da", "kDa"] },
+        "SOLUBILITY": { "defaultUnit": "mg/mL", "units": ["mg/mL", "g/100 mL", "% w/v"] },
+        "VISCOSITY": { "defaultUnit": "mPa.s", "units": ["mPa.s", "cP"] },
+        "CNV": { "defaultUnit": "% w/v", "units": ["% w/v", "mg/mL", "M"] },
+        "TG_PRIME": { "defaultUnit": "degC", "units": ["degC", "degK"] },
+        "PARTITION_COEFFICIENT": { "defaultUnit": "logP", "units": ["logP"] },
+        "DIELECTRIC_CONSTANT": { "defaultUnit": "dimensionless", "units": ["dimensionless"] },
+        "THERMAL_CONDUCTIVITY": { "defaultUnit": "W/(m.K)", "units": ["W/(m.K)"] },
+        "HEAT_CAPACITY": { "defaultUnit": "J/(g.K)", "units": ["J/(g.K)", "J/(mol.K)"] },
+        "THERMAL_EXPANSION_COEFFICIENT": { "defaultUnit": "1/K", "units": ["1/K"] },
+        "CRYSTALLIZATION_TEMPERATURE": { "defaultUnit": "degC", "units": ["degC", "degK"] },
+        "DIFFUSION_COEFFICIENT": { "defaultUnit": "m2/s", "units": ["m2/s", "cm2/s"] },
+        "HYDROGEN_BOND_DONORS_ACCEPTORS": { "defaultUnit": "count", "units": ["count"] },
+        "SOURCE_OF_COMPOUND": { "defaultUnit": "text", "units": ["text"] },
+        "GRAS_CERTIFICATION": { "defaultUnit": "boolean", "units": ["boolean"] },
+        "MELTING_POINT": { "defaultUnit": "degC", "units": ["degC", "degCK"] },
+        "HYDROPHOBICITY": { "defaultUnit": "qualitative", "units": ["qualitative"] },
+        "DENSITY": { "defaultUnit": "g/cm3", "units": ["g/cm3", "kg/m3"] },
+        "REFRACTIVE_INDEX": { "defaultUnit": "dimensionless", "units": ["dimensionless"] },
+        "SURFACE_TENSION": { "defaultUnit": "mN/m", "units": ["mN/m", "dyn/cm"] },
+        "PH": { "defaultUnit": "dimensionless", "units": ["dimensionless"] },
+        "OSMOLALITY_OSMOLARITY": { "defaultUnit": "Osmol/kg", "units": ["Osmol/kg", "Osmol/L"] },
+        "POLAR_SURFACE_AREA": { "defaultUnit": "A2", "units": ["A2"] }
+      }
+    }
+  }
+}
