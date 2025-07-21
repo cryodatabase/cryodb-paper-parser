@@ -5,7 +5,8 @@ from jsonschema import validate, ValidationError
 from dotenv import load_dotenv
 import google.generativeai as genai
 import sys
-
+from distiller.pmc.get_papers import get_papers_from_pmc
+from distiller.pmc.get_cpa_facts import get_cpa_facts_from_papers
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -64,19 +65,26 @@ if __name__ == "__main__":
         print(f"Usage: python {sys.argv[0]} <paper.txt|paper.pdf>")
         exit(1)
     input_path = sys.argv[1]
-    if input_path.lower().endswith('.pdf'):
-        try:
-            paper_text = extract_text_from_pdf(input_path)
-        except Exception as e:
-            print(f"[ERROR] Failed to extract text from PDF: {e}")
-            exit(1)
+
+    if input_path.lower().endswith('pmids.txt'):
+        get_papers_from_pmc(input_path)
+        get_cpa_facts_from_papers()
+
     else:
-        print(f"[TRACE] Reading text file: {input_path}")
-        with open(input_path) as f:
-            paper_text = f.read()
-    extracted = extract_paper_data(paper_text)
-    if extracted:
-        print("[TRACE] Extraction and validation complete. Outputting JSON...")
-        print(json.dumps(extracted, indent=2))
-    else:
-        print("[ERROR] Extraction failed.") 
+        if input_path.lower().endswith('.pdf'):
+            try:
+                paper_text = extract_text_from_pdf(input_path)
+            except Exception as e:
+                print(f"[ERROR] Failed to extract text from PDF: {e}")
+                exit(1)
+        else:
+            print(f"[TRACE] Reading text file: {input_path}")
+            with open(input_path) as f:
+                paper_text = f.read()
+
+        extracted = extract_paper_data(paper_text)
+        if extracted:
+            print("[TRACE] Extraction and validation complete. Outputting JSON...")
+            print(json.dumps(extracted, indent=2))
+        else:
+            print("[ERROR] Extraction failed.") 
