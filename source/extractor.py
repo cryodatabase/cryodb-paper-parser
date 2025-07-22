@@ -5,9 +5,11 @@ from jsonschema import validate, ValidationError
 from dotenv import load_dotenv
 import google.generativeai as genai
 import sys
+from pathlib import Path
+load_dotenv()
 from distiller.pmc.get_papers import get_papers_from_pmc
 from distiller.pmc.get_cpa_facts import get_cpa_facts_from_papers
-load_dotenv()
+from distiller.mistral_ocr.extractor import extract_text_mistral
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
@@ -65,10 +67,17 @@ if __name__ == "__main__":
         print(f"Usage: python {sys.argv[0]} <paper.txt|paper.pdf>")
         exit(1)
     input_path = sys.argv[1]
-
+    if os.path.isdir(input_path):
+        pdf_files = list(Path(input_path).glob("*.pdf"))
+        if pdf_files:
+            extract_text_mistral(pdf_files, source_files="local_directory")
+            exit(0)
+        else:
+            print(f"No PDF files found in directory '{input_path}'.")
+            exit(1)
     if input_path.lower().endswith('pmids.txt'):
         get_papers_from_pmc(input_path)
-        get_cpa_facts_from_papers()
+        get_cpa_facts_from_papers() # max limit 100 papers
 
     else:
         if input_path.lower().endswith('.pdf'):
