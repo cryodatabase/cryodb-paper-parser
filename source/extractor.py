@@ -77,7 +77,7 @@ if __name__ == "__main__":
             exit(1)
     if input_path.lower().endswith('pmids.txt'):
         get_papers_from_pmc(input_path)
-        get_cpa_facts_from_papers()
+        get_cpa_facts_from_papers() # max limit 100 papers
 
     else:
         if input_path.lower().endswith('.pdf'):

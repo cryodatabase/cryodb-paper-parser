@@ -5,6 +5,7 @@ from distiller.postgres_connection import connection_ctx
 from distiller.utils.file_utils import generate_md5
 from distiller.utils.db_utils import hash_in_psql
 from distiller.utils.s3_utils import upload_file_to_s3, upload_fulltext_to_s3, get_s3_object_key, get_s3_presigned_url
+from distiller.mistral_ocr.cpa_facts import get_cpa_facts_from_fulltext
 from distiller.schemas.papers import Paper, PaperStatus
 from datetime import datetime
 
@@ -86,6 +87,7 @@ def extract_text_mistral(files: list[str], source_files :str):
                         ),
                     )
                     conn.commit()
+                    get_cpa_facts_from_fulltext(paper.md5_hash) # this step should be isolated later in order to achieve separation of concerns.
                     
                 except UniqueViolation:
                     # Do nothing on duplicate hash, just log and proceed
