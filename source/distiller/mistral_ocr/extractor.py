@@ -7,19 +7,17 @@ from distiller.utils.db_utils import hash_in_psql
 from distiller.utils.s3_utils import upload_file_to_s3, upload_fulltext_to_s3, get_s3_object_key, get_s3_presigned_url
 from distiller.schemas.papers import Paper, PaperStatus
 from datetime import datetime
-from dotenv import load_dotenv
-load_dotenv()
 
 
-S3_TARGET_BUCKET = os.getenv("S3_TARGET_BUCKET")
-MISTRAL_API_KEY = os.environ["MISTRAL_API_KEY"]
-if not S3_TARGET_BUCKET:
+_S3_TARGET_BUCKET = os.getenv("S3_TARGET_BUCKET")
+_MISTRAL_API_KEY = os.environ["MISTRAL_API_KEY"]
+if not _S3_TARGET_BUCKET:
     raise RuntimeError("S3_TARGET_BUCKET must be defined in .env file")
 
-if not MISTRAL_API_KEY:
+if not _MISTRAL_API_KEY:
     raise RuntimeError("MISTRAL_API_KEY must be defined in .env file")
 
-client = Mistral(MISTRAL_API_KEY=MISTRAL_API_KEY)
+client = Mistral(api_key=_MISTRAL_API_KEY)
 
 def extract_text_from_s3(file_s3_uri: str):
     """Generate OCR for the given file s3 uri(only pdf files) and return the Mistral full text."""
@@ -27,7 +25,7 @@ def extract_text_from_s3(file_s3_uri: str):
     if not object_key:
         raise ValueError(f"No S3 object key found for {file_s3_uri}")
 
-    s3_presigned_url = get_s3_presigned_url(S3_TARGET_BUCKET, object_key)
+    s3_presigned_url = get_s3_presigned_url(_S3_TARGET_BUCKET, object_key)
     return client.ocr.process(
         model="mistral-ocr-latest",
         document={
@@ -93,7 +91,6 @@ def extract_text_mistral(files: list[str], source_files :str):
                     # Do nothing on duplicate hash, just log and proceed
                     conn.rollback()
                     print(f"[TRACE] Duplicate md5_hash for {file}; skipping insert.")
-                    continue
 
                 except Exception as e:
                     # Roll back any partial work in this iteration and continue with next file
