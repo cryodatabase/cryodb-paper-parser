@@ -33,6 +33,7 @@ CREATE TABLE papers (
   md5_hash         CHAR(64),
   file_size_bytes  INTEGER,
   file_s3_uri       TEXT,
+  fulltext_s3_uri   TEXT,
   cpa_facts_json   JSONB,
   status           paper_status NOT NULL DEFAULT 'PENDING',
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
