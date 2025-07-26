@@ -9,7 +9,7 @@ from pathlib import Path
 load_dotenv()
 from distiller.pmc.get_papers import get_papers_from_pmc
 from distiller.pmc.get_cpa_facts import get_cpa_facts_from_papers
-from distiller.mistral_ocr.extractor import extract_text_mistral
+from distiller.mistral_ocr.extractor import extract_text_mistral    
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
