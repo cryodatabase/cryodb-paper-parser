@@ -90,7 +90,7 @@ Represent the amount with the point/range wrapper and provide unit. ALWAYS CHECK
 
 Facts – extract quantitative / qualitative properties that match FactType enum.
 
-One CPAFact per property per agent.
+One CPAFact per property per agent. Make sure agent_label represents the agent name.
 
 Link each fact to its experiment_id; if the fact belongs to a mixture, also include formulation_id.
 
