@@ -29,6 +29,21 @@ def get_s3_presigned_url(bucket_name: str, object_key: str):
 
     return url
 
+def upload_fulltext_to_s3(fulltext: Any, object_key: str, bucket: str = S3_TARGET_BUCKET) -> str:
+    """Uploads a fulltext string to S3. Returns the s3:// URI of the uploaded file."""
+    if isinstance(fulltext, str):
+        full_markdown = fulltext
+    else:
+        full_markdown = "\n\n".join(page.markdown for page in fulltext.pages)
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False) as tmpfile:
+        tmpfile.write(full_markdown)
+        tmpfile_path = tmpfile.name
+
+    s3_uri = upload_file_to_s3(tmpfile_path, bucket=bucket, object_key=object_key)
+    os.remove(tmpfile_path)
+    return s3_uri
+
 def upload_mistral_fulltext_to_s3( ocr_response: Any, object_key: str, bucket: str = S3_TARGET_BUCKET) -> str:
     """Extracts fulltext markdown from a Mistral OCR response object and uploads it to S3. Returns the s3:// URI of the uploaded file."""
 

@@ -5,6 +5,7 @@ from typing import Iterator, Generator, Optional, Any
 import psycopg
 from psycopg import Connection as _PGConnection
 from psycopg import Cursor as _PGCursor
+from pgvector.psycopg import register_vector
 
 
 _DB_NAME: str = os.getenv("PGDATABASE", "postgres")
@@ -33,6 +34,7 @@ def get_connection(
 @contextmanager
 def connection_ctx(**kwargs: Any) -> Generator[_PGConnection, None, None]:
     conn = get_connection(**kwargs)
+    register_vector(conn)
     try:
         yield conn
     finally:

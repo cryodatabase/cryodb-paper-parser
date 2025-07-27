@@ -237,7 +237,7 @@ class Experiment(BaseModel):
 class AgentProperty(BaseModel):  # renamed from CPAProperty
     property_id  : UUID = Field(default_factory=uuid4)
     agent_id     : Optional[str]
-    label        : str
+    agent_label  : str #agent name
     prop_type    : PropertyType
     value        : FactValue
     unit         : Optional[str] = None
