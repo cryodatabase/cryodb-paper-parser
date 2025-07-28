@@ -69,13 +69,26 @@ END$$;
 --------------------------------------------------------------------
 -- 4. Table: cpa_chemicals
 --------------------------------------------------------------------
+CREATE EXTENSION IF NOT EXISTS citext;
+
+CREATE TABLE IF NOT EXISTS cpa_chemical_aliases (
+  chemical_id  UUID   NOT NULL REFERENCES cpa_chemicals(id) ON DELETE CASCADE,
+  alias        CITEXT NOT NULL,
+  embedding    vector(3072) NOT NULL,
+  is_preferred BOOLEAN DEFAULT FALSE,
+  PRIMARY KEY (chemical_id, alias)      -- citext PK ⇒ case‑insensitive unique
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_alias_global
+    ON cpa_chemical_aliases (alias);
+
+
 CREATE TABLE IF NOT EXISTS cpa_chemicals (
   id             UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
   inchikey       TEXT UNIQUE,
   preferred_name TEXT        NOT NULL,
   synonyms       JSONB       NOT NULL DEFAULT '[]',  -- array of strings
   role           cryoprotectant_roles,
-  embedding      vector(1536),
+  embedding      vector(3072),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (inchikey IS NULL OR inchikey ~* '^[A-Z]{14}-[A-Z]{10}-[A-Z]$')
@@ -171,3 +184,10 @@ CREATE TABLE IF NOT EXISTS cpa_references (
 
 CREATE INDEX IF NOT EXISTS idx_ref_propval
   ON cpa_references (property_value_id);
+/* Extension (only once per DB) */
+CREATE EXTENSION IF NOT EXISTS citext;
+
+-- Option A: change the column type
+ALTER TABLE cpa_chemicals
+  ALTER COLUMN preferred_name TYPE citext;
+
