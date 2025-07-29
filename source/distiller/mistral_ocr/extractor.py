@@ -4,8 +4,9 @@ from psycopg.errors import UniqueViolation
 from distiller.postgres_connection import connection_ctx
 from distiller.utils.file_utils import generate_md5
 from distiller.utils.db_utils import hash_in_psql
-from distiller.utils.s3_utils import upload_file_to_s3, upload_fulltext_to_s3, get_s3_object_key, get_s3_presigned_url
-from distiller.mistral_ocr.cpa_facts import get_cpa_facts_from_fulltext
+from distiller.utils.s3_utils import upload_file_to_s3, upload_mistral_fulltext_to_s3, get_s3_object_key, get_s3_presigned_url
+from distiller.mistral_ocr.gpt_cpa_facts import get_cpa_facts_from_fulltext as get_cpa_facts_from_fulltext_gpt
+from distiller.mistral_ocr.update_metadata import update_metadata_from_fulltext
 from distiller.schemas.papers import Paper, PaperStatus
 from datetime import datetime
 
@@ -21,7 +22,7 @@ if not _MISTRAL_API_KEY:
 client = Mistral(api_key=_MISTRAL_API_KEY)
 
 def extract_text_from_s3(file_s3_uri: str):
-    """Generate OCR for the given file s3 uri(only pdf files) and return the Mistral full text."""
+    """Generate Mistral OCR for the given file s3 uri(only pdf files) and return the Mistral full text."""
     object_key = get_s3_object_key(file_s3_uri)
     if not object_key:
         raise ValueError(f"No S3 object key found for {file_s3_uri}")
@@ -36,9 +37,11 @@ def extract_text_from_s3(file_s3_uri: str):
         include_image_base64=True,
     )
 
+
+
 def extract_text_mistral(files: list[str], source_files :str):
 
-    print(f"[TRACE] Extracting full text from PDFs: {files}")
+    print(f"[TRACE][MISTRAL-OCR] Extracting full text from PDFs: {files}")
     with connection_ctx() as conn:
         with conn.cursor() as cur:
             for file in files:
@@ -51,7 +54,7 @@ def extract_text_mistral(files: list[str], source_files :str):
 
                     s3_uri = upload_file_to_s3(file, object_key=f"raw/{file_md5_hash}.pdf")
                     fulltext = extract_text_from_s3(s3_uri)
-                    fulltext_s3_uri = upload_fulltext_to_s3(fulltext, object_key = f"processed/{file_md5_hash}.txt")
+                    fulltext_s3_uri = upload_mistral_fulltext_to_s3(fulltext, object_key = f"processed/{file_md5_hash}.txt")
                     
                     paper = Paper(
                         source=source_files,
@@ -87,7 +90,8 @@ def extract_text_mistral(files: list[str], source_files :str):
                         ),
                     )
                     conn.commit()
-                    get_cpa_facts_from_fulltext(paper.md5_hash) # this step should be isolated later in order to achieve separation of concerns.
+                    update_metadata_from_fulltext(paper.md5_hash, fulltext, source_files, cur)
+                    get_cpa_facts_from_fulltext_gpt(paper.md5_hash) # this step should be isolated later in order to achieve separation of concerns.
                     
                 except UniqueViolation:
                     # Do nothing on duplicate hash, just log and proceed
