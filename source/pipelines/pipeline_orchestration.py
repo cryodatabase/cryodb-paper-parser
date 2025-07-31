@@ -81,3 +81,40 @@ def run_pipeline(files: list[str], source_files: str, config: PipelineConfig):
                     print(f"[ERROR] Failed to extract experiments for {md5_hash}")
                     update_workflow_status(md5_hash, PaperStatus.FAILED)
 
+    if config.distiller == "llama_parse" and config.llm_model_parser == "claude-sonnet-4-20250514":
+
+        for md5_hash, fulltext in extract_fulltext_llama_parse(files, source_files):
+            paper_id = update_metadata_from_fulltext(md5_hash, fulltext)
+            if paper_id is None:
+                print(f"[ERROR] Failed to update metadata for {md5_hash}")
+                update_workflow_status(md5_hash, PaperStatus.FAILED)
+                continue
+
+        # ── Agents ───────────────────────────────────────────────
+            agents = extract_agents(fulltext, llm_model=config.llm_model_parser)
+            if agents is None:
+                print(f"[ERROR] Failed to extract agents for {md5_hash}")
+                update_workflow_status(md5_hash, PaperStatus.FAILED)
+                continue
+            
+            print(f'[TRACE] agents: {agents}')
+            agent_rows = agents.get("agents", [])
+            if agent_rows:
+                copy_json(agent_rows, "staging_cpa_chemicals")
+                merge_agents(agent_rows)
+        # ── Agent‑level props ───────────────────────────────────
+            props = extract_agent_properties(fulltext, llm_model=config.llm_model_parser)
+            if props:
+                insert_agent_properties(paper_id, props)
+        # ── Experiments ─────────────────────────────────────────
+            experiments = extract_experiments(fulltext, llm_model=config.llm_model_parser)
+            if experiments is not None:
+                print(f'[TRACE] experiments: {experiments}')
+                insert_experiments(md5_hash, experiments)
+                formulations = extract_formulations(fulltext,experiments, llm_model=config.llm_model_parser)
+                if formulations:
+                    print(f'[TRACE] formulations: {formulations}')
+                    insert_formulations(md5_hash, formulations, experiments)
+                else:
+                    print(f"[ERROR] Failed to extract formulations for {md5_hash}")
+                    update_workflow_status(md5_hash, PaperStatus.FAILED)

@@ -25,8 +25,8 @@ from pydantic import (
 )
 from distiller.schemas.structured_output import (
     ChemicalRole,           # enum (CPA / ADJUVANT / CARRIER)
-    FormulationComponent,   # validated component
-    Formulation             # validated formulation (incl. experiment_id, quote…)
+    Formulation,             # validated formulation (incl. experiment_id, quote…)
+    AgentProperty
 )
 
 
@@ -168,24 +168,5 @@ class AgentPropertyPass(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-class AgentProperty(BaseModel):
-    """
-    Intrinsic physicochemical property for a single agent (CPA / adjuvant).
-    These are formulation‑independent and map to the core CPA tables.
-    """
-    agent_id: Optional[str] = Field(None, description="InChIKey if available.")
-    agent_label: str
-    prop_type: PropertyType
-    value: FactValue
-    unit: Optional[str] = None
-    quote: str
 
-    model_config = ConfigDict(extra="forbid")
-
-    # ── validation (InChIKey) ────────────────────────────────────
-    @field_validator("agent_id")
-    @classmethod
-    def _validate_agent_id(cls, v: Optional[str]) -> Optional[str]:
-        if v and not _INCHIKEY_RE.match(v):
-            raise ValueError("agent_id is not a valid InChIKey.")
-        return v
+        

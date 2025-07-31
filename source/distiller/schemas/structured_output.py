@@ -252,7 +252,6 @@ class Experiment(BaseModel):
 # ────────────────────────────────────────────────────────────────
 # Intrinsic properties of agents
 class AgentProperty(BaseModel):  # renamed from CPAProperty
-    property_id  : UUID = Field(default_factory=uuid4)
     agent_id     : Optional[str]
     agent_label  : str #agent name
     prop_type    : PropertyType
@@ -262,6 +261,31 @@ class AgentProperty(BaseModel):  # renamed from CPAProperty
     model_config = ConfigDict(extra="forbid")
 
     _chk_id = field_validator("agent_id", mode="before")(_validate_inchikey)
+
+    # This is for making sure we have numerical values for fact values
+# --- NEW: hard-type-check the value field ------------------------
+    @field_validator("value")
+    def _numeric_required(cls, v, info):
+        """
+        For properties that are *defined* in FACT_UNIT_DEFAULTS
+        (i.e. they have a numeric default unit), the value must be a
+        PointValue, RangeValue, int or float.  Otherwise raise.
+        """
+        ptype = info.data.get("prop_type")
+        if not ptype:
+            return v                      # nothing to compare against
+
+        # UnitSpec present  → this is a numeric property
+        unit_spec = getattr(FACT_UNIT_DEFAULTS, ptype.name, None)
+        if isinstance(unit_spec, UnitSpec):
+            ok_types = (int, float, PointValue, RangeValue)
+            if isinstance(v, ok_types):
+                return v
+            raise ValueError(
+                f"{ptype.value} expects a numeric value (point or range); "
+                f"got {type(v).__name__}"
+            )
+        return v   
 
     # Ensure supplied unit is legal for the prop_type
     @field_validator("unit")
