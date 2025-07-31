@@ -1,33 +1,54 @@
-DROP VIEW IF EXISTS v_cpa_names_synonyms CASCADE;
-DROP VIEW IF EXISTS v_cpa_property_values CASCADE;
-DROP VIEW IF EXISTS v_cpa_properties CASCADE;
-/* ════════════════════════════════════════════════════════════════
-   ChemSpider‑style presentation views for CryoDB
-   --------------------------------------------------------------
-     • v_cpa_names_synonyms
-     • v_cpa_property_values      (helper, may be queried directly)
-     • v_cpa_properties
-   rev. 2025‑07‑27
-   ═══════════════════════════════════════════════════════════════ */
+/*══════════════════════════════════════════════════════════════════
+  CryoDB  –  presentation views  (rev. 2025‑07‑29)
+  + NEW  v_cpa_alias_embeddings  (for pgvector semantic search)
+══════════════════════════════════════════════════════════════════*/
 
 ------------------------------------------------------------------
--- 1. Flat list of names and synonyms
+-- (Re)create views – safest to DROP CASCADE first
+------------------------------------------------------------------
+DROP VIEW IF EXISTS v_cpa_alias_embeddings   CASCADE;
+DROP VIEW IF EXISTS v_cpa_names_synonyms     CASCADE;
+DROP VIEW IF EXISTS v_cpa_property_values    CASCADE;
+DROP VIEW IF EXISTS v_cpa_properties         CASCADE;
+
+------------------------------------------------------------------
+-- 0.  Alias + embedding  (frontend semantic search entry‑point)
+------------------------------------------------------------------
+CREATE OR REPLACE VIEW v_cpa_alias_embeddings AS
+SELECT
+    chem.id          AS chemical_id,
+    chem.inchikey,
+    chem.role,
+    chem.preferred_name,
+    al.alias,                       -- the exact casing stored
+    al.is_preferred,
+    al.embedding                    -- pgvector(1536)
+FROM   cpa_chemical_aliases AS al
+JOIN   cpa_chemicals        AS chem
+       ON chem.id = al.chemical_id;
+
+-- Example search (parameterised):
+--   SELECT * FROM v_cpa_alias_embeddings
+--   ORDER BY embedding <-> $1::vector
+--   LIMIT 20;
+
+------------------------------------------------------------------
+-- 1. Flat list of names and synonyms  (backwards‑compatible shape)
 ------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_cpa_names_synonyms AS
 SELECT
-    chem.id                  AS chemical_id,
+    chem.id          AS chemical_id,
     chem.inchikey,
     chem.preferred_name,
-    chem.role,                               -- NEW  ‹CPA | Adjuvant | Carrier›
-    COALESCE(synonym.value, chem.preferred_name) AS synonym,  -- include canonical
+    chem.role,
+    al.alias         AS synonym,
     CASE
-        WHEN synonym.value IS NULL THEN 'preferred'
+        WHEN al.is_preferred THEN 'preferred'
         ELSE 'synonym'
-    END                    AS label_type
-FROM   cpa_chemicals AS chem
-LEFT   JOIN LATERAL            -- explode JSONB array into rows
-       jsonb_array_elements_text(chem.synonyms) AS synonym(value)
-       ON TRUE;
+    END              AS label_type
+FROM   cpa_chemical_aliases AS al
+JOIN   cpa_chemicals        AS chem
+       ON chem.id = al.chemical_id;
 
 ------------------------------------------------------------------
 -- 2. Helper: one row per distinct (value, unit)
@@ -37,7 +58,7 @@ SELECT
     cpv.id                  AS property_value_id,
     chem.id                 AS chemical_id,
     chem.preferred_name,
-    chem.role,                              -- NEW
+    chem.role,
     prop.prop_type,
     cpv.unit,
 
@@ -49,7 +70,7 @@ SELECT
                           to_char(cpv.range_max, 'FM999999990.######')
                        )
       WHEN 'RAW'    THEN cpv.raw_value
-      ELSE                cpv.extra::text          -- fallback display
+      ELSE                cpv.extra::text
     END                             AS value_display,
 
     /* ---------- All sources for this (value,unit) --------------------- */
@@ -80,7 +101,7 @@ CREATE OR REPLACE VIEW v_cpa_properties AS
 SELECT
     chemical_id,
     preferred_name,
-    role,                                   -- NEW
+    role,
     prop_type,
     jsonb_agg(
       jsonb_build_object(
@@ -88,7 +109,7 @@ SELECT
         'unit',     unit,
         'sources',  sources
       )
-      ORDER BY value_display         -- deterministic order
+      ORDER BY value_display
     ) AS property_values
 FROM v_cpa_property_values
 GROUP BY chemical_id, preferred_name, role, prop_type;
@@ -96,7 +117,8 @@ GROUP BY chemical_id, preferred_name, role, prop_type;
 ------------------------------------------------------------------
 -- Optional: grant read access to a front‑end role
 ------------------------------------------------------------------
--- GRANT SELECT ON v_cpa_names_synonyms,
+-- GRANT SELECT ON v_cpa_alias_embeddings,
+--                v_cpa_names_synonyms,
 --                v_cpa_property_values,
 --                v_cpa_properties
 --    TO cryo_reader;
