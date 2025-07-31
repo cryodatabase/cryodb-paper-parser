@@ -53,46 +53,48 @@ JOIN   cpa_chemicals        AS chem
 ------------------------------------------------------------------
 -- 2. Helper: one row per distinct (value, unit)
 ------------------------------------------------------------------
+/* ── View: v_cpa_property_values  (paper DOI instead of link) ───────── */
 CREATE OR REPLACE VIEW v_cpa_property_values AS
 SELECT
-    cpv.id                  AS property_value_id,
-    chem.id                 AS chemical_id,
+    cpv.id      AS property_value_id,
+    chem.id     AS chemical_id,
     chem.preferred_name,
     chem.role,
     prop.prop_type,
     cpv.unit,
 
-    /* ---------- Pretty‑printed value ---------------------------------- */
+    /* pretty-printed value ------------------------------------------- */
     CASE cpv.value_kind
-      WHEN 'POINT'  THEN to_char(cpv.numeric_value, 'FM999999990.######')
-      WHEN 'RANGE'  THEN concat_ws(' – ',
+      WHEN 'POINT' THEN to_char(cpv.numeric_value, 'FM999999990.######')
+      WHEN 'RANGE' THEN concat_ws(' – ',
                           to_char(cpv.range_min, 'FM999999990.######'),
-                          to_char(cpv.range_max, 'FM999999990.######')
-                       )
-      WHEN 'RAW'    THEN cpv.raw_value
-      ELSE                cpv.extra::text
-    END                             AS value_display,
+                          to_char(cpv.range_max, 'FM999999990.######'))
+      WHEN 'RAW'   THEN cpv.raw_value
+      ELSE               cpv.extra::text
+    END AS value_display,
 
-    /* ---------- All sources for this (value,unit) --------------------- */
+    /* list of sources ------------------------------------------------- */
     jsonb_agg(
       jsonb_build_object(
         'paper_id', ref.paper_id,
         'quote',    ref.quote,
-        'link',     ref.link
+        'doi',      p.doi           -- ← was “link”, now DOI from papers
       )
       ORDER BY ref.paper_id
     ) AS sources
 
 FROM       chemical_property_values   AS cpv
-JOIN       chemical_properties        AS prop  ON prop.id  = cpv.property_id
-JOIN       cpa_chemicals              AS chem  ON chem.id  = prop.chemical_id
-LEFT JOIN  cpa_references             AS ref   ON ref.property_value_id = cpv.id
-GROUP BY   cpv.id,
-           chem.id, chem.preferred_name, chem.role,
-           prop.prop_type, cpv.unit,
-           cpv.value_kind, cpv.numeric_value,
-           cpv.range_min, cpv.range_max,
-           cpv.raw_value, cpv.extra;
+JOIN       chemical_properties        AS prop ON prop.id  = cpv.property_id
+JOIN       cpa_chemicals              AS chem ON chem.id  = prop.chemical_id
+LEFT JOIN  cpa_references             AS ref  ON ref.property_value_id = cpv.id
+LEFT JOIN  papers                     AS p    ON p.id::text = ref.paper_id    -- NEW
+GROUP BY
+    cpv.id,
+    chem.id, chem.preferred_name, chem.role,
+    prop.prop_type, cpv.unit,
+    cpv.value_kind, cpv.numeric_value,
+    cpv.range_min, cpv.range_max,
+    cpv.raw_value, cpv.extra;
 
 ------------------------------------------------------------------
 -- 3. Aggregated view: one row per property type (à la ChemSpider)

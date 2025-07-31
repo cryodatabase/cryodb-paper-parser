@@ -8,8 +8,10 @@ from distiller.utils.file_utils import clean_json_response
 from distiller.postgres_connection import cursor_ctx
 from collections.abc import Sequence
 from distiller.schemas.structured_output import CPAPaperData
-
+from psycopg.errors import NoDataFound 
 import boto3
+import logging
+log = logging.getLogger(__name__)
 
 s3 = boto3.client("s3")
 
@@ -110,7 +112,8 @@ def update_metadata_from_fulltext(md5_hashes: str | Sequence[str], ocr_response:
         md5_hashes = [md5_hashes]
 
     for md5 in md5_hashes:
-        _update_single_metadata(md5, ocr_response)
+        paper_id = _update_single_metadata(md5, ocr_response)
+    return paper_id
 
 def _update_single_metadata(md5_hash: str, ocr_response: Any) -> None:
     paper_fulltext = (
@@ -123,33 +126,53 @@ def _update_single_metadata(md5_hash: str, ocr_response: Any) -> None:
         print(f"[WARN] Could not extract metadata for {md5_hash}; leaving row unchanged.")
         return
 
+# -------- 3. pydantic validation ------------------------------
     try:
         paper_obj = Paper.model_validate(extracted)
     except ValidationError as err:
-        # Should be rare – additional guard
-        print("[ERROR] Unexpected validation error:", err)
-        return
+        print("[ERROR] Validation failure while updating metadata:", err)
+        return _get_paper_id(md5_hash)
 
-    # Build dynamic UPDATE statement with only non‑None fields
+    # -------- 4. dynamic UPDATE only on changed / present fields --
     columns, values = [], []
-    for field in paper_obj.model_fields_set:  # only fields present in JSON
+    for field in paper_obj.model_fields_set:
+        if field in {"id", "md5_hash", "status"}:
+            continue
         value = getattr(paper_obj, field)
-        if value is None or field in {"id", "md5_hash", "status"}:
+        if value is None:
             continue
         columns.append(f"{field} = %s")
-        # authors_json must be stored as JSONB → dump to str
         values.append(json.dumps(value) if field == "authors_json" else value)
 
-    if not columns:
-        print(f"[TRACE] No new metadata for {md5_hash}.")
-        return
+    if columns:
+        sql = f"""
+            UPDATE papers
+               SET {', '.join(columns)}
+             WHERE md5_hash = %s
+            RETURNING id;          -- <-- RETURNING goes here, inside the query
+        """
 
-    values.append(md5_hash)
-    sql = f"UPDATE papers SET {', '.join(columns)} WHERE md5_hash = %s;"
-    with cursor_ctx() as cur:
-        cur.execute(sql, tuple(values))
-        cur.connection.commit()
-    print(f"[TRACE] Metadata updated for {md5_hash}.")
+        values.append(md5_hash)
+
+        with cursor_ctx(commit=True) as cur:
+            cur.execute(sql, tuple(values))
+            paper_id = cur.fetchone()["id"]        # fetch the UUID you just returned
+
+            log.info("metadata updated for %s", md5_hash)
+            log.info("paper_id fetched for %s → %s", md5_hash, paper_id)
+            return paper_id
+    else:
+        log.info("no new metadata for %s", md5_hash)
+        return None
+
+def _get_paper_id(md5_hash: str, cur) -> str | None:
+    md5_hash = md5_hash.strip()
+    cur.execute("SELECT id FROM papers WHERE md5_hash = %s;", (md5_hash,))
+    row = cur.fetchone()
+    if row:
+        return row["id"]
+    log.warning("paper not found for md5=%s", md5_hash)
+    return None
 
 def add_paper_to_db(paper: Paper, cur):
     cur.execute(
@@ -166,7 +189,7 @@ def add_paper_to_db(paper: Paper, cur):
                     VALUES (%s, %s, %s, %s, %s, %s, %s);
                     """,
                     (
-                        paper.md5_hash,
+                        paper.md5_hash.strip(),
                         paper.file_s3_uri,
                         paper.fulltext_s3_uri,
                         paper.file_size_bytes,

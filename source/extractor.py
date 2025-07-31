@@ -11,6 +11,8 @@ from distiller.pmc.get_papers import get_papers_from_pmc
 from distiller.pmc.get_cpa_facts import get_cpa_facts_from_papers
 from pipelines.pipeline_orchestration import run_pipeline       
 from distiller.schemas.pipeline_config import PipelineConfig
+import nest_asyncio, asyncio, logging
+nest_asyncio.apply()                  # allows re‑entrancy
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:

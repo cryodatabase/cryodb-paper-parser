@@ -12,3 +12,5 @@ def get_embedding(text: str) -> List[float]:
         model="text-embedding-3-large"
     )
     return rsp.data[0].embedding
+
+SIMILARITY_THRESHOLD = 0.38
