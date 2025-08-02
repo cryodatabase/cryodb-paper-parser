@@ -72,11 +72,11 @@ END$$;
 CREATE EXTENSION IF NOT EXISTS citext;
 
 CREATE TABLE IF NOT EXISTS cpa_chemical_aliases (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   chemical_id  UUID   NOT NULL REFERENCES cpa_chemicals(id) ON DELETE CASCADE,
-  alias        CITEXT NOT NULL,
+  alias        CITEXT UNIQUE NOT NULL,
   embedding    vector(3072) NOT NULL,
   is_preferred BOOLEAN DEFAULT FALSE,
-  PRIMARY KEY (chemical_id, alias)      -- citext PK ⇒ case‑insensitive unique
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_alias_global
     ON cpa_chemical_aliases (alias);

@@ -6,6 +6,7 @@ import psycopg
 from psycopg import Connection as _PGConnection
 from psycopg import Cursor as _PGCursor
 from pgvector.psycopg import register_vector
+from psycopg.rows import dict_row
 
 
 _DB_NAME: str = os.getenv("PGDATABASE", "postgres")
@@ -44,7 +45,7 @@ def connection_ctx(**kwargs: Any) -> Generator[_PGConnection, None, None]:
 @contextmanager
 def cursor_ctx(commit: bool = False, **kwargs: Any) -> Generator[_PGCursor, None, None]:
     with connection_ctx(**kwargs) as conn:
-        cur = conn.cursor()
+        cur = conn.cursor(row_factory=dict_row)
         try:
             yield cur
             if commit:

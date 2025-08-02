@@ -30,7 +30,7 @@ CREATE TABLE papers (
   is_free_fulltext BOOLEAN,
   license          TEXT,
 
-  md5_hash         CHAR(64),
+  md5_hash         CHAR(32),
   file_size_bytes  INTEGER,
   file_s3_uri       TEXT,
   fulltext_s3_uri   TEXT,

@@ -1,0 +1,116 @@
+{# -------------------------------------------------------------------
+   Formulation extractor – v3
+   Variables injected by Python:
+     PAPER_TEXT     – source passage (markdown)
+     EXPERIMENT_ID  – deterministic experiment key (e.g. EXPT-17)
+     SCHEMA         – FormulationPass JSON Schema
+   ------------------------------------------------------------------- #}
+
+Extract cryobiology formulation data from PAPER_TEXT. Return only JSON conforming to FormulationPass schema.
+
+CRITICAL RULES:
+1. Extract only information explicitly stated in PAPER_TEXT
+2. Never hallucinate or infer missing data
+3. Each formulation must have unique content
+4. Return only valid JSON
+
+EXTRACTION PROTOCOL:
+
+Extract every formulation described in the passage.
+
+MANDATORY FIELDS for each formulation:
+- experiment_id: Always "{{ EXPERIMENT_ID }}"
+- label: Short descriptive name from paper
+- components: Array with at least 1 component. If 0 components, skip entire formulation
+- quote: Must contain all numeric values for all components in this formulation
+
+COMPONENT EXTRACTION RULES:
+- Extract each component separately. Never combine with "and" or "with"
+- Example: "DMSO (10%) and glycerol (5%)" yields 2 separate components
+- DO NOT INCLUDE QUANTITIES ON THE NAME OF THE COMPONENT."3 M Dymethyl sulfoxide" is  Dymethyl sulfoxide. "1.5 M Ethylene Glycol and 1.5 M Dimethylsulfoxide" is Ethylene Glycol and Dimethyl Sulfoxide. Quantities are stored in a different property.
+
+
+Required component fields:
+- role: Exactly one of "CPA", "ADJUVANT", "CARRIER"
+- agent_id: If role is CPA or ADJUVANT, use valid InChIKey or null. If role is CARRIER, always null
+- amount: Mandatory. Structure: {"value_type": "point", "value": 8} or {"value_type": "range", "min": 5, "max": 15}
+- unit: Mandatory unit string
+- quote: Exact text containing this component's quantity/unit. Connect fragments with "..."
+
+FORMULATION QUOTE:
+Must capture all component quantities. Connect disparate fragments with "..."
+
+OPTIONAL FIELDS:
+Include dependent_properties only if passage reports explicit numerical measurement.
+Omit any field not mentioned in text.
+
+
+EXAMPLE OUTPUT:
+```json
+{
+  "formulations": [
+    {
+      "formulation_id": "b3d4e5f6-7890-1234-5678-9abcdef01234",
+      "label": "VS55 vitrification solution",
+      "experiment_id": "EXPT-17",
+      "components": [
+        {
+          "component_id": "c1d2e3f4-5678-9012-3456-7890abcdef12",
+          "role": "CPA",
+          "label": "Dimethyl sulfoxide",
+          "agent_id": "IAZDPXIOMUYVGZ-UHFFFAOYSA-N",
+          "amount": {"value_type": "point", "value": 3.1},
+          "unit": "M",
+          "quote": "The VS55 solution contained 3.1 M dimethyl sulfoxide"
+        },
+        {
+          "component_id": "d2e3f4g5-6789-0123-4567-890abcdef123",
+          "role": "CPA",
+          "label": "Formamide",
+          "agent_id": "ZHNUHDYFZUAESO-UHFFFAOYSA-N",
+          "amount": {"value_type": "point", "value": 3.1},
+          "unit": "M",
+          "quote": "3.1 M formamide was included as a permeating cryoprotectant"
+        },
+        {
+          "component_id": "e3f4g5h6-7890-1234-5678-90abcdef1234",
+          "role": "CPA",
+          "label": "Propylene glycol",
+          "agent_id": "DNIAPMSPPWPWGF-UHFFFAOYSA-N",
+          "amount": {"value_type": "point", "value": 2.2},
+          "unit": "M",
+          "quote": "Additionally, 2.2 M propylene glycol was added"
+        },
+        {
+          "component_id": "f4g5h6i7-8901-2345-6789-0abcdef12345",
+          "role": "CARRIER",
+          "label": "Euro-Collins solution",
+          "agent_id": null,
+          "amount": {"value_type": "point", "value": 100},
+          "unit": "%",
+          "quote": "All components were dissolved in Euro-Collins solution as the carrier medium"
+        }
+      ],
+      "dependent_properties": [
+        {
+          "property_type": "viability",
+          "value": 85.3,
+          "unit": "%",
+          "conditions": "post-thaw assessment at 24 hours"
+        }
+      ],
+      "quote": "The VS55 solution contained 3.1 M dimethyl sulfoxide (Me2SO, Sigma-Aldrich) and 3.1 M formamide (Sigma-Aldrich) as permeating cryoprotectants. Additionally, 2.2 M propylene glycol was added to enhance glass-forming properties ... All components were dissolved in Euro-Collins solution as the carrier medium. The final solution had a pH of 7.8 and osmolality of 3,200 mOsm/kg ... Post-thaw viability assessment at 24 hours showed 85.3% cell survival compared to fresh controls ... The solution was cooled at a rate of 1°C/min to -80°C before plunging into liquid nitrogen"
+    }
+  ]
+}
+```
+
+
+OUTPUT:
+Return only the JSON object.
+
+SCHEMA:
+{{ SCHEMA }}
+
+PAPER_TEXT:
+{{ PAPER_TEXT }}

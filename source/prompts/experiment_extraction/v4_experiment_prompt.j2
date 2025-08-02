@@ -1,0 +1,63 @@
+Scientific Experiment Extractor
+Extract all experiments performed by the authors and return a JSON array conforming to the provided schema.
+Instructions
+
+Extract only experiments performed by the authors - skip cited/referenced work
+Use exact terminology from the source text
+Include dimensions only when specific measurements are provided
+Set fields to null if not mentioned - don't invent data
+Return only valid JSON - no markdown formatting
+Source chunks must total minimum 1000 words - use multiple list elements for different paper sections
+
+Dimension Types (include only if measurements given)
+
+MASS: organ/tissue mass (g, mg)
+VOLUME: cell/organoid volume (nL, pL, µm3)
+DIAMETER: cell diameter (µm)
+SIZE: tissue dimensions - width/height/thickness (mm, µm)
+
+Source Chunk Requirements
+
+List of exact text excerpts from the paper covering the experiment
+Each element = one continuous text section from the paper
+Total word count across all elements ≥ 1000 words
+Include all sections containing numeric values related to the experiment
+
+Example
+Input: "Primary rat hepatocytes were isolated from healthy adult Sprague-Dawley rats. Liver tissue sections (2mm × 2mm × 1mm) weighing approximately 8 mg were prepared for analysis. Cells measured 18-22 μm in diameter and were cultured in specialized medium. We performed MTT viability assays and Western blotting to assess protein expression."
+Output:
+json[
+  {
+    "performed_in_this_paper": true,
+    "label": "Hepatocyte isolation and tissue preparation",
+    "method": "tissue sectioning",
+    "biological_context": {
+      "species": "rat",
+      "organ": "liver",
+      "tissue": "liver tissue sections", 
+      "cell_line": "primary hepatocytes",
+      "developmental_stage": "adult",
+      "health_status": "healthy",
+      "dimensions": {
+        "kind": "SIZE",
+        "width": 2.0,
+        "height": 2.0, 
+        "thickness": 1.0,
+        "unit": "mm",
+        "quote": "Liver tissue sections (2mm × 2mm × 1mm)"
+      }
+    },
+    "quote": "Primary rat hepatocytes were isolated from healthy adult Sprague-Dawley rats. Liver tissue sections (2mm × 2mm × 1mm) weighing approximately 8 mg were prepared for analysis.",
+    "source_chunk": [
+      "Primary rat hepatocytes were isolated from healthy adult Sprague-Dawley rats using standard perfusion techniques. The isolation protocol involved perfusion with calcium-free buffer followed by collagenase digestion for 15-20 minutes at 37°C. Liver tissue sections (2mm × 2mm × 1mm) weighing approximately 8 mg were prepared for analysis using precision cutting techniques.",
+      "Cell viability was assessed immediately after isolation using trypan blue exclusion, with only preparations showing >85% viability being used for subsequent experiments. Cells measured 18-22 μm in diameter and were cultured in specialized medium containing Williams' E medium supplemented with 10% fetal bovine serum, 100 nM insulin, 100 nM dexamethasone, and antibiotic-antimycotic solution.",
+      "Culture conditions were maintained at 37°C in a humidified atmosphere with 5% CO2. We performed MTT viability assays and Western blotting to assess protein expression. Statistical analysis was performed using ANOVA with post-hoc testing."
+    ]
+  }
+]
+Schema:
+```json
+{{ SCHEMA }}
+```
+Text to analyze:
+{{ PAPER_TEXT }}

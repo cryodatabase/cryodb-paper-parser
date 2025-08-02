@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PaperStatus(str, Enum):
@@ -59,3 +59,10 @@ class Paper(BaseModel):
     class Config:  # type: ignore[override]
         orm_mode = True  # Pydantic v1; accepted by v2 as well
         from_attributes = True  # Pydantic v2 equivalent
+
+    # ───────────────────────── validators ────────────────────────
+    @field_validator("md5_hash", mode="before")
+    @classmethod
+    def _strip_md5(cls, v: str | None) -> str | None:
+        """Trim stray spaces/newlines around the MD5 string."""
+        return v.strip() if isinstance(v, str) else v

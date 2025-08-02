@@ -128,6 +128,20 @@ FACT_UNIT_DEFAULTS = FactUnitDefaults(
     POLAR_SURFACE_AREA            = UnitSpec(defaultUnit="A2",          units=["A2"]),
 )
 
+class DependentPropertyType(str, Enum):
+    MEMBRANE_PERMEABILITY   = "MEMBRANE_PERMEABILITY"
+    TOXICITY                = "TOXICITY"
+    LOADING_TEMPERATURE     = "LOADING_TEMPERATURE"
+    UNLOADING_TEMPERATURE   = "UNLOADING_TEMPERATURE"
+    CRITICAL_COOLING_RATE   = "CRITICAL_COOLING_RATE"
+    CRITICAL_WARMING_RATE   = "CRITICAL_WARMING_RATE"
+class DependentProperty(BaseModel):
+    property_id     : UUID = Field(default_factory=uuid4)
+    property_type   : DependentPropertyType
+    value           : FactValue          # POINT / RANGE / STRUCT / RAW
+    unit            : Optional[str] = None
+    quote           : str
+    model_config    = ConfigDict(extra="forbid")
 # ────────────────────────────────────────────────────────────────
 # Base class for dimension types
 class DimensionBase(BaseModel):
@@ -205,8 +219,9 @@ class FormulationComponent(BaseModel):
     agent_id     : Optional[str] = Field(
         None, description="InChIKey of the chemical component."
     )
-    amount       : Optional[NumericValue] = None
+    amount       : NumericValue
     unit         : Optional[str] = None
+    
     quote        : str
     note         : Optional[str] = None
     model_config = ConfigDict(extra="forbid")
@@ -217,8 +232,9 @@ class Formulation(BaseModel):
     formulation_id : UUID = Field(default_factory=uuid4)
     label          : str
     components     : List[FormulationComponent]
-    experiment_id  : UUID
-    quote          : str
+    experiment_id: str   # links back to ExperimentItem.id
+    dependent_properties : List[DependentProperty] = Field(default_factory=list)
+    quote          : str = Field(description="The source chunk of the formulation. It must be exact extracted from the paper, and fragmented if needed to include all numeric values. Minimum length is 200 words. If needed, use ... to separate different chunks of text. ALWAYS EXACT QUOTE EXTRACTED FROM TEXT") # must be exact extracted from the paper, and fragmented if needed to include all numeric values
     model_config   = ConfigDict(extra="forbid")
 
 # ────────────────────────────────────────────────────────────────
@@ -230,12 +246,12 @@ class Experiment(BaseModel):
     method              : Optional[str] = None
     biological_context  : Optional[SampleContext] = None
     quote               : str
+    source_chunk        : List[str] = Field(default_factory=list, description="The source chunk of the experiment. It must be exact extracted from the paper, and fragmented if needed to include all numeric values. Minimum length is 1000 words")
     model_config = ConfigDict(extra="forbid")
 
 # ────────────────────────────────────────────────────────────────
 # Intrinsic properties of agents
 class AgentProperty(BaseModel):  # renamed from CPAProperty
-    property_id  : UUID = Field(default_factory=uuid4)
     agent_id     : Optional[str]
     agent_label  : str #agent name
     prop_type    : PropertyType
@@ -245,6 +261,31 @@ class AgentProperty(BaseModel):  # renamed from CPAProperty
     model_config = ConfigDict(extra="forbid")
 
     _chk_id = field_validator("agent_id", mode="before")(_validate_inchikey)
+
+    # This is for making sure we have numerical values for fact values
+# --- NEW: hard-type-check the value field ------------------------
+    @field_validator("value")
+    def _numeric_required(cls, v, info):
+        """
+        For properties that are *defined* in FACT_UNIT_DEFAULTS
+        (i.e. they have a numeric default unit), the value must be a
+        PointValue, RangeValue, int or float.  Otherwise raise.
+        """
+        ptype = info.data.get("prop_type")
+        if not ptype:
+            return v                      # nothing to compare against
+
+        # UnitSpec present  → this is a numeric property
+        unit_spec = getattr(FACT_UNIT_DEFAULTS, ptype.name, None)
+        if isinstance(unit_spec, UnitSpec):
+            ok_types = (int, float, PointValue, RangeValue)
+            if isinstance(v, ok_types):
+                return v
+            raise ValueError(
+                f"{ptype.value} expects a numeric value (point or range); "
+                f"got {type(v).__name__}"
+            )
+        return v   
 
     # Ensure supplied unit is legal for the prop_type
     @field_validator("unit")
