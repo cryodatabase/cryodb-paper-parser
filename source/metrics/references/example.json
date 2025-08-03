@@ -1,0 +1,11 @@
+{
+  "text": "The Eiffel Tower is located in Paris, France. It was constructed between 1887 and 1889 as the entrance to the 1889 World's Fair. The tower stands at 324 meters tall including its antenna. It was designed by Gustave Eiffel and is made of iron lattice construction.",
+  "facts": [
+    "The Eiffel Tower is in Paris, France",
+    "Construction period was 1887-1889", 
+    "Built as entrance to 1889 World's Fair",
+    "Height is 324 meters including antenna",
+    "Designed by Gustave Eiffel",
+    "Made of iron lattice construction"
+  ]
+}
