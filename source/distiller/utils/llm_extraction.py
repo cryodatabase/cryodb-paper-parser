@@ -8,10 +8,17 @@ from anthropic import Anthropic
 from jinja2 import Environment, FileSystemLoader
 _jinja = Environment(loader=FileSystemLoader("source/prompts"))
 import os
-
+from distiller.schemas.pipeline_config import PipelineConfig
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 claude_client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
+from deepeval.prompt import Prompt
+
+with open('config.json', 'r') as f:
+    json_str = f.read()
+config = PipelineConfig.model_validate_json(json_str)
+
+backoff.on_exception(backoff.expo, Exception, max_tries=3)
 def _llm_extract(
     prompt: str,
     schema_model: type[BaseModel],
@@ -22,7 +29,13 @@ def _llm_extract(
     messages: List[Dict[str, str]] = [{"role": "user", "content": prompt}]
     @backoff.on_exception(backoff.expo, Exception, max_tries=max_retries)
     def _call(messages):
-        if model == "gpt-4.1-mini":
+        if model == "gpt-5-2025-08-07":
+            return client.chat.completions.create(
+                model=model,
+                messages=messages,
+                response_format={"type": "json_object"},
+            )
+        elif model == "gpt-4.1-mini":
             return client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -35,6 +48,7 @@ def _llm_extract(
             # Use streaming for large responses
             full_content = ""
             with claude_client.messages.stream(
+
                 model=model,
                 messages=messages,
                 max_tokens=64000,
@@ -88,17 +102,28 @@ def extract_agents(paper_text: str, llm_model: str) -> list[dict] | None:
     )
     return _llm_extract(prompt, AgentsPass, model=llm_model)
 
-def extract_experiments(paper_text: str, llm_model: str) -> list[dict] | None:
+def extract_experiments(paper_text: str, llm_model: str, prompt_to_llm: str | None = None) -> list[dict] | None:
     """Run a single ExperimentPass over the full paper."""
-    prompt = _jinja.get_template("experiment_extraction/v4_experiment_prompt.j2").render(
-        PAPER_TEXT=paper_text,
-        SCHEMA=ExperimentPass.model_json_schema(),
-    )
+    if prompt_to_llm:
+        prompt = prompt_to_llm
+    else:
+        prompt_experiments = Prompt(alias="experiments_extraction")
+        prompt_experiments.pull()
+        experiments_prompt_interpolate = prompt_experiments.interpolate(
+            SCHEMA=ExperimentPass.model_json_schema(),
+            PAPER_TEXT=paper_text
+        )
+        prompt = experiments_prompt_interpolate
+        #prompt = _jinja.get_template(f"{config.version}/experiment_extraction/experiment_prompt.j2").render(
+        #    PAPER_TEXT=paper_text,
+        #    SCHEMA=ExperimentPass.model_json_schema(),
+        #)
+    
     parsed = _llm_extract(prompt, ExperimentPass, model=llm_model)
     return parsed["experiments"] if parsed else None
 
 def extract_agent_properties(paper_text: str, llm_model: str) -> list[dict] | None:
-    prompt = _jinja.get_template("molecule_extraction/v2_agent_property_prompt.j2").render(
+    prompt = _jinja.get_template(f"{config.version}/molecule_extraction/agent_property_prompt.j2").render(
         PAPER_TEXT=paper_text,
         SCHEMA=AgentPropertyPass.model_json_schema(),
     )
@@ -108,12 +133,14 @@ def extract_agent_properties(paper_text: str, llm_model: str) -> list[dict] | No
 def extract_formulations(paper_text: str, experiments: list[dict], llm_model: str) -> list[dict]:
     all_forms: list[dict] = []
 
+    print("EXPERIMENTS: ", experiments)
     for exp in experiments:
-        prompt = _jinja.get_template("formulation_extraction/v5_formulation_prompt.j2").render(
+        prompt = _jinja.get_template(f"{config.version}/formulation_extraction/formulation_prompt.j2").render(
             PAPER_TEXT = paper_text,            # single prompt per exp
             EXPERIMENT_ID = exp["id"],
             SCHEMA = FormulationPass.model_json_schema(),
         )
+        print(f'SCHEMA FORMULATIONS: {FormulationPass.model_json_schema()}')
         parsed = _llm_extract(prompt, FormulationPass, model=llm_model)
         if not parsed:
             continue
@@ -124,3 +151,40 @@ def extract_formulations(paper_text: str, experiments: list[dict], llm_model: st
         all_forms.extend(parsed["formulations"])
 
     return all_forms
+
+
+def extract_formulations_all_experiments(
+    paper_text: str,
+    experiments: list[dict],
+    llm_model: str,
+    prompt_to_llm: str | None = None,
+) -> list[dict]:
+    """Single-pass formulation extraction for all experiments.
+
+    This variant avoids the O(n) loop over individual experiments by sending one
+    prompt that lists every experiment ID. The LLM must include the appropriate
+    `experiment_id` on each formulation it returns. The `FormulationPass` schema
+    is enforced exactly as in `extract_formulations`.
+    """
+    if prompt_to_llm:
+        prompt = prompt_to_llm
+    else:
+        print("EXPERIMENTS: ", experiments)
+        prompt_formulations = Prompt(alias="formulations_extraction")
+        prompt_formulations.pull()
+        prompt_formulations_interpolate = prompt_formulations.interpolate(
+            SCHEMA=FormulationPass.model_json_schema(),
+            PAPER_TEXT=paper_text,
+            EXPERIMENTS=experiments,
+        )
+        prompt = prompt_formulations_interpolate
+       # prompt = _jinja.get_template(
+       #     f"{config.version}/formulation_extraction/formulation_prompt_multi.j2"
+       # ).render(
+       #     PAPER_TEXT=paper_text,
+       #     EXPERIMENTS=experiments,  # full JSON list so template can reference IDs
+       #     SCHEMA=FormulationPass.model_json_schema(),
+       # )
+
+    parsed = _llm_extract(prompt, FormulationPass, model=llm_model)
+    return parsed["formulations"] if parsed else []

@@ -61,8 +61,3 @@ class Paper(BaseModel):
         from_attributes = True  # Pydantic v2 equivalent
 
     # ───────────────────────── validators ────────────────────────
-    @field_validator("md5_hash", mode="before")
-    @classmethod
-    def _strip_md5(cls, v: str | None) -> str | None:
-        """Trim stray spaces/newlines around the MD5 string."""
-        return v.strip() if isinstance(v, str) else v

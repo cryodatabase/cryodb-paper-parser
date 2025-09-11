@@ -3,3 +3,14 @@
 
 /source/metrics/output/*
 !/source/metrics/output/.gitkeep
+/examples
+useful_command.sh
+batch_1_final
+test_sample
+bak
+.deepeval
+barry_batch
+batch_1
+evaluation_batch
+examples
+manual-labels

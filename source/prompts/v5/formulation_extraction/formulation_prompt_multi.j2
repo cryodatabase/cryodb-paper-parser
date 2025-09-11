@@ -1,0 +1,50 @@
+{# -------------------------------------------------------------------
+   Formulation extractor – multi-experiment
+   Variables injected by Python:
+     PAPER_TEXT    – full paper text (markdown)
+     EXPERIMENTS   – JSON list of experiment objects [{"id": "EXPT-001", ...}, …]
+     SCHEMA        – FormulationPass JSON Schema
+   ------------------------------------------------------------------- #}
+
+Extract cryobiology formulation data for ALL experiments listed in EXPERIMENTS from PAPER_TEXT.
+Return ONLY JSON conforming to FormulationPass schema.
+
+CRITICAL RULES:
+1. Extract only information explicitly stated in PAPER_TEXT.
+2. Never hallucinate or infer missing data.
+3. Each formulation MUST include the correct "experiment_id" matching one of the EXPERIMENTS ids.
+4. Each formulation must have unique content.
+5. Return only valid JSON.
+
+EXTRACTION PROTOCOL:
+• Consider every formulation described anywhere in PAPER_TEXT.
+• Map each formulation to the corresponding experiment by context. If uncertain, omit the formulation.
+• Follow the same component extraction rules used in the single-experiment prompt.
+
+MANDATORY FIELDS per formulation:
+- experiment_id: One of {{ EXPERIMENTS | map(attribute='id') | list }}
+- label
+- components (>=1) – see COMPONENT RULES below
+- quote – must capture ALL numeric values for all components
+
+COMPONENT RULES (identical to single-experiment version):
+- Extract each component separately; never combine components.
+- Do NOT include quantities in the component label.
+- Required component fields:
+  • role: "CPA", "ADJUVANT", or "CARRIER"
+  • agent_id: InChIKey or null per rules
+  • amount: {"value_type": "point"|"range", ...}
+  • unit: required
+  • quote: exact text fragment containing the component's quantity
+
+OPTIONAL FIELDS:
+Include dependent_properties only if PAPER_TEXT reports explicit numerical measurement.
+
+OUTPUT:
+Return only the JSON object.
+
+SCHEMA:
+{{ SCHEMA }}
+
+PAPER_TEXT:
+{{ PAPER_TEXT }}

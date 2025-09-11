@@ -109,6 +109,8 @@ def _extract_metadata(fulltext: str) -> Dict[str, Any] | None:
 
 def update_metadata_from_fulltext(md5_hashes: str | Sequence[str], ocr_response: Any) -> None:
     if isinstance(md5_hashes, str):
+        if md5_hashes is None:
+            return None
         md5_hashes = [md5_hashes]
 
     for md5 in md5_hashes:
@@ -186,10 +188,11 @@ def add_paper_to_db(paper: Paper, cur):
                         source,
                         created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id;
                     """,
                     (
-                        paper.md5_hash.strip(),
+                        paper.md5_hash,
                         paper.file_s3_uri,
                         paper.fulltext_s3_uri,
                         paper.file_size_bytes,
@@ -198,7 +201,7 @@ def add_paper_to_db(paper: Paper, cur):
                         paper.created_at,
                     ),
                 )
-
+    return cur.fetchone()[0]
 
 
 def _stream_s3_text(uri: str) -> str:

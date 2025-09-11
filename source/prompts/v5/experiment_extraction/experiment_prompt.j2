@@ -1,0 +1,91 @@
+# Scientific Experiment Extractor — v3 (Last updated 2025‑08‑05)
+
+Extract **every individual experiment actually performed by the paper’s authors** and return a JSON array that conforms exactly to the provided schema.
+
+--------------------------------------------------------------------
+CORE INSTRUCTIONS
+--------------------------------------------------------------------
+1. **Authors‑only** Skip experiments that are merely cited or referenced.  
+2. **Exact wording** When filling `label`, `method`, or any descriptive field, copy the paper’s terminology verbatim whenever it exists.  
+3. **Dimensions** Include them *only* when a numeric measurement is explicitly reported.  
+4. **Null defaults** If a field is not mentioned, set it to `null`. Never invent data.  
+5. **Pure JSON output** Return *only* valid JSON – no markdown, comments, or trailing commas.
+
+--------------------------------------------------------------------
+GRANULARITY RULES (avoid aggregation)
+--------------------------------------------------------------------
+6. **One JSON object per distinct experimental setup.**  
+   Triggers for a new object include headings such as “Cooling Method 3—”, “Protocol B”, numbered/bulleted lists, or any change in species, organ, reagent concentration, temperature program, device, or warming/cooling strategy.  
+7. **Preserve headings in `label`.**  
+   e.g. `"Cooling Method 3 — Rat hearts immersed in liquid nitrogen"`  
+8. **Concise `method`.**  
+   Copy a clear technique name if present; otherwise synthesise a 2‑4‑word descriptor (e.g. “perfusion cooling”, “pressure freezing”, “diathermy warming”).  
+9. **Quote isolation.**  
+   `quote` and every string inside `source_chunk` must describe *only that experiment*; do not bleed over into neighbouring methods or commentary.
+
+--------------------------------------------------------------------
+SOURCE‑CHUNK REQUIREMENTS
+--------------------------------------------------------------------
+10. `source_chunk` is an **array of continuous excerpts** (one per element) taken verbatim from the paper.  
+11. **Total length per experiment ≥ 1 000 words.**  
+    ‑ Use as many list elements as necessary; each element must come from a different section/page when possible.  
+    ‑ Ensure the combined excerpts cover *all* sentences containing numeric values, procedural details, and immediate results for that experiment.  
+12. Maintain original spelling, punctuation, and line breaks inside each excerpt.
+
+--------------------------------------------------------------------
+DIMENSION TYPES  
+(Include one of these objects inside `biological_context.dimensions` only if the measurement is present)
+--------------------------------------------------------------------
+- `MASS`       organ/tissue mass (g, mg)  
+- `VOLUME`     cell/organoid volume (nL, pL, µm³)  
+- `DIAMETER`   cell diameter (µm)  
+- `SIZE`       tissue block dimensions — width/height/thickness (mm, µm)
+
+--------------------------------------------------------------------
+EXAMPLE (illustrates multiple methods, ≥ 1 000‑word chunks shortened here for brevity)
+--------------------------------------------------------------------
+_Input excerpt_  
+“Cooling Method 1— Mouse livers (1.2 g) were perfusion‑cooled …  
+Cooling Method 2— The same procedure was repeated with 15 % DMSO …”
+
+_Expected output (truncated):_
+[
+  {
+    "performed_in_this_paper": true,
+    "label": "Cooling Method 1— Mouse liver perfusion cooling",
+    "method": "perfusion cooling",
+    "biological_context": {
+      "species": "mouse",
+      "organ": "liver",
+      "tissue": null,
+      "cell_line": null,
+      "developmental_stage": null,
+      "health_status": null,
+      "dimensions": {
+        "kind": "MASS",
+        "mass": 1.2,
+        "unit": "g",
+        "quote": "(1.2 g)"
+      }
+    },
+    "quote": "Cooling Method 1— Mouse livers (1.2 g) were perfusion‑cooled …",
+    "source_chunk": [
+      "<≈700 words from Methods section describing coolant composition, flow rate, and temperature program>",
+      "<≈350 words from Results section giving cooling curves and survival data>"
+    ]
+  },
+  {
+    "performed_in_this_paper": true,
+    "label": "Cooling Method 2— Mouse liver perfusion cooling with 15 % DMSO",
+    "method": "perfusion cooling",
+    …
+  }
+]
+
+--------------------------------------------------------------------
+SCHEMA
+```json
+{{ SCHEMA }}
+```
+TEXT TO ANALYZE
+{{ PAPER_TEXT }}

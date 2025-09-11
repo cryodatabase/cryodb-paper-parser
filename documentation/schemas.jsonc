@@ -1,0 +1,256 @@
+/**
+List of property types with units we accept per each extracted independent molecule property (CPA/Adjuvants)
+
+FACT_UNIT_DEFAULTS = FactUnitDefaults(
+    MOLECULAR_MASS                = UnitSpec(defaultUnit="g/mol",       units=["g/mol", "Da", "kDa"]),
+    SOLUBILITY                    = UnitSpec(defaultUnit="mg/mL",       units=["mg/mL", "g/100 mL", "% w/v"]),
+    VISCOSITY                     = UnitSpec(defaultUnit="mPa.s",       units=["mPa.s", "cP"]),
+    TG_PRIME                      = UnitSpec(defaultUnit="degC",        units=["degC", "degK"]),
+    PARTITION_COEFFICIENT         = UnitSpec(defaultUnit="logP",        units=["logP"]),
+    DIELECTRIC_CONSTANT           = None,
+    THERMAL_CONDUCTIVITY          = UnitSpec(defaultUnit="W/(m.K)",     units=["W/(m.K)"]),
+    HEAT_CAPACITY                 = UnitSpec(defaultUnit="J/(g.K)",     units=["J/(g.K)", "J/(mol.K)"]),
+    THERMAL_EXPANSION_COEFFICIENT = UnitSpec(defaultUnit="1/K",         units=["1/K"]),
+    CRYSTALLIZATION_TEMPERATURE   = UnitSpec(defaultUnit="degC",        units=["degC", "degK"]),
+    DIFFUSION_COEFFICIENT         = UnitSpec(defaultUnit="m2/s",        units=["m2/s", "cm2/s"]),
+    HYDROGEN_BOND_DONORS_ACCEPTORS= UnitSpec(defaultUnit="count",       units=["count"]),
+    SOURCE_OF_COMPOUND            = UnitSpec(defaultUnit="text",        units=["text"]),
+    GRAS_CERTIFICATION            = UnitSpec(defaultUnit="boolean",     units=["boolean"]),
+    MELTING_POINT                 = UnitSpec(defaultUnit="degC",        units=["degC", "degK"]),
+    HYDROPHOBICITY                = UnitSpec(defaultUnit="qualitative", units=["qualitative"]),
+    DENSITY                       = UnitSpec(defaultUnit="g/cm3",       units=["g/cm3", "kg/m3"]),
+    REFRACTIVE_INDEX              = None,
+    SURFACE_TENSION               = UnitSpec(defaultUnit="mN/m",        units=["mN/m", "dyn/cm"]),
+    PH                            = None,
+    OSMOLALITY_OSMOLARITY         = UnitSpec(defaultUnit="Osmol/kg",    units=["Osmol/kg", "Osmol/L"]),
+    POLAR_SURFACE_AREA            = UnitSpec(defaultUnit="A2",          units=["A2"]),
+)
+*/
+
+/**
+ * Below, you will find the pydantic models used to validate and normalise the JSON returned by the LLM.
+ * Additionally, to avoid any confusion, i will also add an example of the expected output.
+ * You will notice that the structured data extracted from a given paper it is not a single JSON object, but a list of objects and then we aggregate them into a single JSON object.
+ * The objects we extract are:
+ * 1. Agents aliases
+ * 2. Agents properties
+ * 3. Experiments
+ * 4. Formulations 
+ */
+{
+/**
+Pydantic model for agents aliases:
+
+class MoleculeCoreData(BaseModel):
+    """One *chemical agent* extracted from the paper."""
+    inchikey: Optional[str] = Field(None, description="Use standard InChIKey when possible.")
+    preferred_name: str
+    synonyms: List[str] = Field(default_factory=list)
+    role: ChemicalRole
+    model_config = ConfigDict(extra="forbid")
+*/
+
+// EXAMPLE BELOW
+"agents_aliases":
+[
+    {
+        "inchikey": null, // InchiKey if possible, otherwise null
+        "preferred_name": "Dimethyl sulfoxide", 
+        "synonyms": ["DMSO", "Me₂SO"],
+        "role": "CPA" // Role (CPA / ADJUVANT / CARRIER)
+    },
+    {
+        "inchikey": "PEDCQBHIVMGVHV-UHFFFAOYSA-N",
+        "preferred_name": "Glycerol",
+        "synonyms": [],
+        "role": "CPA"
+    }
+],
+/*
+Pydantic model for agents properties:
+
+class AgentPropertyPass(BaseModel):
+    """
+    One JSON envelope per paper – list of intrinsic properties
+    for the chemicals that appeared in `MoleculeCoreData`.
+    """
+    properties: List[AgentProperty]
+    model_config = ConfigDict(extra="forbid")
+
+
+class AgentProperty(BaseModel):  # renamed from CPAProperty
+    agent_id     : Optional[str]
+    agent_label  : str #agent name
+    prop_type    : PropertyType
+    value        : FactValue
+    unit         : Optional[str] = None
+    quote        : str
+    model_config = ConfigDict(extra="forbid")
+*/
+// AGENTS PROPERTIES ARRAY
+"agents_properties": [
+    {
+        "agent_id": null, // InchiKey if possible, otherwise null
+        "agent_label": "ethylene glycol",
+        "prop_type": "MOLECULAR_MASS", // Please review property types 
+        "value": {
+            "value_type": "point", // Point / Range / RawScalar / StructuredValue
+            "value": 62.07
+        },
+        "unit": "g/mol",
+        "quote": "EG has a lower molecular weight (62.07 g/mol) than that of DMSO (78.13 kDa)"
+    },
+    {
+        "agent_id": null, // InchiKey if possible, otherwise null
+        "agent_label": "DMSO",
+        "prop_type": "MOLECULAR_MASS", // Please review property types 
+        "value": {
+            "value_type": "range", // just to show you an example with 'range'
+            "min": 78.13,
+            "max": 78.13
+        },
+        "unit": "kDa",
+        "quote": "EG has a lower molecular weight (62.07 g/mol) than that of DMSO (78.13 kDa)"
+    }
+],
+
+/*
+Pydantic model for experiments:
+
+
+class ExperimentPass(BaseModel):
+    """Top‑level container returned by the experiment extractor."""
+
+    experiments: List[ExperimentItem]
+    model_config = ConfigDict(extra="forbid")
+
+
+class ExperimentItem(BaseModel):
+    """A single experiment identified in a heading‑based chunk."""
+    id: str = Field(..., description="Deterministic ID (e.g. 'EXPT‑003').")
+    performed_in_this_paper: bool = True
+    label: Optional[str] = None
+    method: Optional[str] = None
+    biological_context: Optional[SampleContext] = None
+    quote: str
+    source_chunk        : List[str] = Field(default_factory=list, description="The source chunk of the experiment. It must be exact extracted from the paper, and fragmented if needed to include all numeric values. Minimum length is 1000 words")
+    model_config = ConfigDict(extra="forbid")
+
+Biological context:
+
+class SampleContext(BaseModel):
+    organ: Optional[str] = None
+    tissue: Optional[str] = None
+    species: Optional[str] = None
+    cell_line: Optional[str] = None
+    dimensions: Optional[str] = None
+    health_status: Optional[str] = None
+    developmental_stage: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
+*/
+
+// EXPERIMENTS ARRAY
+"experiments": [{
+    "id": "EXPT-001",
+    "performed_in_this_paper": true,
+    "label": "High pressure freezing of inner ear tissues",
+    "method": "high pressure freezing and freeze substitution",
+    "biological_context": {
+        "organ": "inner ear",
+        "tissue": "cochlear and vestibular tissues",
+        "species": "gerbil, guinea pig, mouse, rat, newt",
+        "cell_line": null,
+        "dimensions": null,
+        "health_status": "healthy",
+        "developmental_stage": "adult and P30"
+    },
+    "quote": "For fresh frozen samples from gerbil and guinea pig, the auditory bullae were removed and held on ice. Cochlear and vestibular tissues were dissected from the bullae just prior to freezing. The time between sacrifice and freezing was approximately thirty minutes. Isolated mouse utricular maculae were removed to glutamax minimum essential medium with HyClone serum and 10 mM HEPES and maintained for 4-6 h prior to freezing.",
+    "source_chunk": [
+        "High Pressure Freezing: For fresh frozen samples from gerbil and guinea pig, the auditory bullae were removed and held on ice. Cochlear and vestibular tissues were dissected from the bullae just prior to freezing. The time between sacrifice and freezing was approximately thirty minutes. Isolated mouse utricular maculae were removed to glutamax minimum essential medium (Life Technologies, UK) with HyClone serum (Thermo Fisher Scientific, USA) and 10 mM 4-(2-Hydroxyethyl)piperazine-1-ethanesulfonic acid (HEPES) (pH 7.3) (Sigma-Aldrich, USA) and maintained for 4-6 h prior to freezing. Otic capsules from the newts were removed from the animals into Amphibian Dulbecco's phosphate buffered saline (Taylor and Forge, 2005) and the inner ear samples consisting of the saccular maculae, amphibian papilla, and lagena macula were isolated then transferred to culture medium (Taylor and Forge, 2005) for maintenance at room temperature for 30-90 min prior to freezing.",
+        "For fixed tissue, auditory bullae were isolated and opened to expose the cochleae. Fixative was gently injected into the cochlea and vestibular system via an opening made at the apex of the cochlea and a widening into the vestibule created by breaking the bone between the round and oval windows and removing the stapes. The bulla was then immersed in fixative and fixation continued for 1.5 h at room temperature. The fixative was 2.5% glutaraldehyde (Agar Scientific, UK) in 0.1 M cacodylate buffer pH 7.3 with 3 mM CaCl2. Individual cochlear turns were then dissected under 0.1 M cacodylate buffer straight after the end of the fixation period and immediately prepared for high pressure freezing.",
+        "For freezing, samples were loaded into 200 μm deep aluminium planchettes, (Leica Microsystems, Germany). The planchette was filled with a cryoprotectant/filler and covered with the flat (non-depression) side of a second planchette pressed firmly down to remove air and to minimise the total depth of the freezing sample to 200 μm. Tissue from mice, gerbils and guinea pigs was frozen in a Leica HPM 100 high pressure freezer (Leica Microsystems). Newt tissue was frozen in either the Leica machine or a Bal-Tec HPM 010 high pressure freezer (BAL-TEC AG, Liechtenstein). Freezing rates in both devices were greater than 25,000 K/s.",
+        "Several different cryoprotectants and fillers were tested: 20% Dextran (Sigma-Aldrich) in 10 mM HEPES-buffered (pH 7.3) Hank's balanced salt solution (HBSS) (Sigma-Aldrich) (HB-HBSS); 1-hexadecene (Sigma-Aldrich); 25% glycerol (Sigma-Aldrich) in 0.1 M cacodylate buffer; or a yeast paste of commercial bakers yeast (Allinson, UK) reconstituted in HB-HBSS (fresh tissue) or 0.1 M cacodylate buffer (fixed tissue). All cryoprotectants were introduced to the tissue in the planchette at room temperature, directly before freezing. Time between cryoprotectant introduction and freezing was <3 min. After freezing samples were stored under liquid nitrogen until freeze substitution (FS)."
+    ] // This does not matter for manual labeling purposes. Only used for extracting formulations with LLMs
+}],
+
+/*
+Pydantic model for formulations:
+
+# Top‑level container returned by the LLM
+class FormulationPass(BaseModel):
+    """
+    Wrapper returned by the formulation‑extraction prompt.
+    Re‑uses the `Formulation` model defined in distiller.schemas.structured_output.
+    """
+    formulations: List[Formulation]
+    model_config = ConfigDict(extra="forbid")
+
+class Formulation(BaseModel):
+    formulation_id : UUID = Field(default_factory=uuid4)
+    label          : str
+    components     : List[FormulationComponent]
+    experiment_id: str   # links back to ExperimentItem.id
+    dependent_properties : List[DependentProperty] = Field(default_factory=list)
+    quote          : str = Field(description="The source chunk of the formulation. It must be exact extracted from the paper, and fragmented if needed to include all numeric values. Minimum length is 200 words. If needed, use ... to separate different chunks of text. ALWAYS EXACT QUOTE EXTRACTED FROM TEXT") # must be exact extracted from the paper, and fragmented if needed to include all numeric values
+    model_config   = ConfigDict(extra="forbid")
+
+class FormulationComponent(BaseModel):
+    component_id : UUID = Field(default_factory=uuid4)
+    role         : ChemicalRole
+    label        : str
+    agent_id     : Optional[str] = Field(
+        None, description="InChIKey of the chemical component."
+    )
+    amount       : NumericValue
+    unit         : Optional[str] = None
+    
+    quote        : str
+    note         : Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+
+
+class ChemicalRole(str, Enum):  # formerly ComponentRole
+    CPA      = "CPA"
+    ADJUVANT = "ADJUVANT"
+    CARRIER  = "CARRIER"
+
+*/
+// FORMULATIONS ARRAY
+"formulations": [
+    {
+        "formulation_id": "a1b2c3d4-5678-9012-3456-7890abcdef01", // DOES NOT MATTER
+        "label": "3% Me2SO cryopreservation solution", 
+        "experiment_id": "EXPT-001", // JUST USE IT TO "LINK" THE FORMULATION TO THE EXPERIMENT
+        "dependent_properties": [], // MEMBRANE PERMEABILITY, TOXICITY, LOADING / UNLOADING TEMPERATURES, CRITICAL COOLING AND WARMING RATES
+        "quote": "Different Me₂SO concentration (V/V) of 3%, 5%, 7%, 8%, 10%, 15%, 20%, dissolved in cell culture medium, were one-step loaded into cell suspension contained in cryogenic vials, respectively, and the loading procedures used for all above concentration were identical. The final volume was 0.5 mL in each vial.",
+        "components": [
+            {
+                "component_id": "b2c3d4e5-6789-0123-4567-890abcdef012", // DOES NOT MATTER. 
+                "role": "CPA", 
+                "label": "Dimethyl sulfoxide", 
+                "agent_id": "IAZDPXIOMUYVGZ-UHFFFAOYSA-N", 
+                "amount": {
+                    "value_type": "point", 
+                    "value": 3.0
+                }, 
+                "unit": "%", // this "Unit" field is not very well defined, we could improve it. i belive here we should talk about volumes (or quantities to be more specific) but not sure
+                "quote": "Different Me₂SO concentration (V/V) of 3%, 5%, 7%, 8%, 10%, 15%, 20%, dissolved in cell culture medium", 
+                "note": null
+            }, 
+            {
+                "component_id": "c3d4e5f6-7890-1234-5678-90abcdef1234", 
+                "role": "CARRIER", 
+                "label": "cell culture medium", 
+                "agent_id": null, 
+                "amount": {
+                    "value_type": "point", 
+                    "value": 97.0
+                }, 
+                "unit": "%", 
+                "quote": "Different Me₂SO concentration (V/V) of 3%, 5%, 7%, 8%, 10%, 15%, 20%, dissolved in cell culture medium", 
+                "note": null
+            }
+        ]
+    }]  
+}
