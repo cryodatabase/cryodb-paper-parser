@@ -1,5 +1,5 @@
 from pipelines.extract.llama_parse import extract_fulltext as extract_fulltext_llama_parse
-from pipelines.utils.paper_utils import update_metadata_from_fulltext
+from pipelines.utils.paper_utils import update_metadata_from_fulltext, write_metadata_batch_jsonl
 from pipelines.utils.pipeline_utils import update_workflow_status
 from pipelines.post_processing.agent_property_ingest import insert_agent_properties
 from pipelines.post_processing.experiment_ingest import insert_experiments
@@ -30,6 +30,8 @@ from deepeval.metrics import HallucinationMetric
 from deepeval.dataset import EvaluationDataset
 from deepeval import evaluate
 
+FLAG_BATCH=False
+
 HALLUCINATION = HallucinationMetric(threshold=0.5)
 @contextmanager
 def timed(label: str):
@@ -43,70 +45,65 @@ def timed(label: str):
 # Pulling prompts from confident-ai studio dashboard
 
 
-
 def run_pipeline(files: list[str], source_files: str, config: PipelineConfig):
 
-    if config.distiller == "llama_parse" and "gpt-5-2025-08-07" in config.llm_model_parser:
-        for md5_hash, fulltext in extract_fulltext_llama_parse(files, source_files, config=config):
+    if config.distiller == "llama_parse" and "o3-2025-04-16" in config.llm_model_parser:
+        for *paper_id, md5_hash, fulltext in extract_fulltext_llama_parse(files, source_files, config=config):
             if config.playground_enabled:
                 json_uuid = md5_hash
                 paper_id = update_metadata_from_fulltext(md5_hash, fulltext)
-                agents, llm_res_agents = extract_agents(fulltext, llm_model="gpt-4.1-mini")
-                props = extract_agent_properties(fulltext, llm_model="gpt-4.1-mini")
-                experiments = extract_experiments(fulltext, llm_model="gpt-4.1-mini")
-                formulations = extract_formulations(fulltext, experiments, llm_model="gpt-4.1-mini")
-                save_json({"paper_id": [str(paper_id)]}, json_uuid, "gpt-4.1-mini")
-                save_json({"agents": agents}, json_uuid, "gpt-4.1-mini")
-                save_json({"agents_properties": props}, json_uuid, "gpt-4.1-mini")
-                save_json({"experiments": experiments}, json_uuid, "gpt-4.1-mini")
-                save_json({"formulations": formulations}, json_uuid, "gpt-4.1-mini")
+                agents, llm_res_agents = extract_agents(fulltext, llm_model="o3-2025-04-16")
+                props = extract_agent_properties(fulltext, llm_model="o3-2025-04-16")
+                experiments = extract_experiments(fulltext, llm_model="o3-2025-04-16")
+                formulations = extract_formulations(fulltext, experiments, llm_model="o3-2025-04-16")
 
             else:
-                with timed("0‑update_metadata"):
-                    paper_id = update_metadata_from_fulltext(md5_hash, fulltext)
-                    if paper_id is None:
-                        print(f"[ERROR] Failed to update metadata for {md5_hash}")
-                        update_workflow_status(md5_hash, PaperStatus.FAILED)
-                        continue
+                if FLAG_BATCH:
+                    print("[TRACE] Batch mode enabled")
+                    write_metadata_batch_jsonl(md5_hash, fulltext)
+                else:
+                    with timed("0‑update_metadata"):
+                        paper_id = update_metadata_from_fulltext(md5_hash, fulltext)
+                        if paper_id is None:
+                            print(f"[ERROR] Failed to update metadata for {md5_hash}")
+                            update_workflow_status(md5_hash, PaperStatus.FAILED)
+                            continue
 
-            # ── Agents ───────────────────────────────────────────────
-                with timed("1‑extract_agents"):
-                    agents = extract_agents(fulltext, llm_model="gpt-4.1-mini")
-                    if agents is None:
-                        print(f"[ERROR] Failed to extract agents for {md5_hash}")
-                        update_workflow_status(md5_hash, PaperStatus.FAILED)
-                        continue
-                with timed("1a‑merge_agents"):
-                    agent_rows = agents.get("agents", [])
-                    if agent_rows:
-                        copy_json(agent_rows, "staging_cpa_chemicals")
-                        agents_inserted = merge_agents(agent_rows)
-            # ── Agent‑level props ───────────────────────────────────
-                with timed("2‑extract_agent_props"):
-                    props = extract_agent_properties(fulltext, llm_model="gpt-4.1-mini")
-                with timed("2a‑insert_agent_props"):
-                    if props:
-                        insert_agent_properties(paper_id, props)
-                        save_json({"agents_properties": props}, json_uuid, "gpt-4.1-mini")
+                # ── Agents ───────────────────────────────────────────────
+                    with timed("1‑extract_agents"):
+                        agents = extract_agents(fulltext, llm_model="claude-sonnet-4-20250514", batch=FLAG_BATCH)
+                        if agents is None:
+                            print(f"[ERROR] Failed to extract agents for {md5_hash}")
+                            update_workflow_status(md5_hash, PaperStatus.FAILED)
+                            continue
+                    with timed("1a‑merge_agents"):
+                        agent_rows = agents.get("agents", [])
+                        if agent_rows:
+                            agents_inserted = merge_agents(agent_rows)
+                # ── Agent‑level props ───────────────────────────────────
+                    with timed("2‑extract_agent_props"):
+                        props = extract_agent_properties(fulltext, llm_model="claude-sonnet-4-20250514")
+                    with timed("2a‑insert_agent_props"):
+                        if props:
+                            insert_agent_properties(paper_id, props)
 
-            # ── Experiments ─────────────────────────────────────────
-                with timed("3‑extract_experiments"):
-                    experiments = extract_experiments(fulltext, llm_model="gpt-4.1-mini")
-                with timed("3a‑insert_experiments"):
-                    if experiments is not None:
-                        print(f'[TRACE] experiments: {experiments}')
-                        insert_experiments(md5_hash, experiments)
-                        save_json({"experiments": experiments}, json_uuid, "gpt-4.1-mini")
-                        with timed("4‑extract_formulations"):
-                            formulations = extract_formulations(fulltext, experiments, llm_model="gpt-4.1-mini")
-                        with timed("4a‑insert_formulations"):
-                            if formulations:
-                                print(f'[TRACE] formulations: {formulations}')
-                                insert_formulations(md5_hash, formulations, experiments)
-                                save_json({"formulations": formulations}, json_uuid, "gpt-4.1-mini")
-                    else:
-                        print(f"[ERROR] Failed to extract experiments for {md5_hash}")
-                        update_workflow_status(md5_hash, PaperStatus.FAILED)
+                # ── Experiments ─────────────────────────────────────────
+                    with timed("3‑extract_experiments"):
+                        experiments = extract_experiments(fulltext, llm_model="o3-2025-04-16")
+                    with timed("3a‑insert_experiments"):
+                        if experiments is not None:
+                            print(f'[TRACE] experiments: {experiments}')
+                            insert_experiments(md5_hash, experiments)
+                            with timed("4‑extract_formulations"):
+                                formulations = extract_formulations(fulltext, experiments, llm_model="o3-2025-04-16")
+                            with timed("4a‑insert_formulations"):
+                                if formulations:
+                                    print(f'[TRACE] formulations: {formulations}')
+                                    insert_formulations(md5_hash, formulations, experiments)
+                        else:
+                            print(f"[ERROR] Failed to extract experiments for {md5_hash}")
+                            update_workflow_status(md5_hash, PaperStatus.FAILED)
+                
 
     #how to review in the entire config.llm_model_parser list[str]
 

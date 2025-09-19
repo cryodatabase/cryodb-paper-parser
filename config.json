@@ -2,10 +2,11 @@
   "version": "v5",
   "playground_enabled": false,
   "distiller": "llama_parse",
-  "llm_model_parser": ["claude-sonnet-4-20250514"],
+  "llm_model_parser": ["o3-2025-04-16"],
   "available_models": [
     "gpt-5-2025-08-07",
     "claude-sonnet-4-20250514",
-    "gpt-4.1-mini"
+    "gpt-4.1-mini",
+    "o3-2025-04-16"
   ]
 }

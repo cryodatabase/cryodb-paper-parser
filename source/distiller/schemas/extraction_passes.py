@@ -103,7 +103,7 @@ class ExperimentItem(BaseModel):
     label: Optional[str] = None
     cooling_method: Optional[str] = None
     rewarming_method: Optional[str] = None
-    biological_context: Optional[SampleContext] = None
+    biological_context: SampleContext = None
     quote: str
     source_chunk        : List[str] = Field(default_factory=list, description="The source chunk of the experiment. It must be exact extracted from the paper, and fragmented if needed to include all numeric values. Minimum length is 1000 words")
     model_config = ConfigDict(extra="forbid")

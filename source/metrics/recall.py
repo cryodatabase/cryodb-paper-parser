@@ -42,7 +42,7 @@ Recall = TP / (TP + FN).
 FORMULATIONS_RECALL = GEval(
     evaluation_params=[LLMTestCaseParams.ACTUAL_OUTPUT, LLMTestCaseParams.EXPECTED_OUTPUT],
     name="formulations_recall",
-    threshold=0.89,
+    threshold=0.84,
     criteria="""
 Goal: Compute formulation-level recall by comparing actual output vs expected output (per SCHEMA FORMULATIONS).
 
@@ -103,7 +103,7 @@ FORMULATIONS_ROLE_RECALL = GEval(
     threshold=0.88,
     criteria="""
 Goal: Compute component-level recall for component ROLES (CPA, ADJUVANT, CARRIER) while being SUPerset‑tolerant. Extra components present in the actual output MUST NOT reduce recall. Only the roles of components that appear in the expected output are scored.
-
+ 
 Parameters used: actual output, expected output.
 Parameters NOT used: input, retrieval context, context, tools called, expected tools.
 
@@ -190,5 +190,75 @@ The final score is the Jaccard Index (Intersection over Union), which measures t
 **Score = TP / (TP + FN + FP)**
 
 A score of 1.0 is achieved only when FN = 0 and FP = 0, meaning the set of actual experiments is identical to the set of expected experiments.
+"""
+)
+CARRIER_RECALL = GEval(
+    evaluation_params=[LLMTestCaseParams.ACTUAL_OUTPUT, LLMTestCaseParams.EXPECTED_OUTPUT],
+    name="carrier_recall",
+    threshold=0.85,
+    criteria="""
+Goal
+Compute a component-level recall metric restricted to the role CARRIER, with superset tolerance and one-to-one formulation alignment. The score is perfect (1.0) only when, for every aligned formulation pair, all expected CARRIER components are present in the actual and labeled with role 'CARRIER'.
+
+Parameters used: actual output, expected output.
+Parameters NOT used: input, retrieval context, context, tools called, expected tools.
+
+Population to score
+- E_carriers = the set of all components across all expected formulations whose role == 'CARRIER'.
+- Only components in E_carriers are eligible for scoring. Non-carrier components are used only to help align formulations; they are never scored.
+- Extra components in the actual output (including extra carriers) are ignored for scoring (no penalties).
+
+Two-stage evaluation
+
+Step 1 — Align formulations (superset‑tolerant, carrier‑recall friendly)
+Build a one‑to‑one alignment between expected and actual formulations that maximizes the number of expected carriers that can become True Positives (TP).
+
+Candidate matching rules (apply in order):
+  1) Prefer pairs with the same experiment_id when both sides specify it.
+  2) Superset anchor using NON‑CARRIER components: an actual formulation is a valid candidate for an expected formulation if EVERY expected CPA/ADJUVANT component (by identity; see normalization below) is present in the actual. The actual may contain extra components (including carriers, buffers, salts) — these NEVER invalidate candidacy.
+  3) If an expected formulation has no CPA/ADJUVANT components (i.e., only carriers are listed), then candidacy is based on carrier identity: an actual formulation is a candidate if it contains at least one of the expected carriers (identity‑compatible). If no such actual exists, leave the expected formulation unmatched.
+  4) Tie‑breakers across multiple candidates (in order): 
+     a) more matched expected non‑carrier components; 
+     b) higher Jaccard overlap using only the expected component set; 
+     c) same or closer experiment_id label match.
+
+Amount/format normalization for Step 1 candidacy ONLY (NOT used for Step 2 scoring):
+  • Treat “x” and “×” as equivalent.
+  • Treat “%” and “vol%” as equivalent when context indicates v/v.
+  • Remainder rule: “X% A in B” is compatible with an expected that lists carrier B at (100−X)% (and vice‑versa).
+  • For carriers/buffers, treat “1×”, “1x”, “proportion 1.0”, and umbrella strengths (e.g., “0.1 M cacodylate buffer”) as mutually compatible for alignment if the carrier identity matches.
+  • Minor formatting differences (spacing, case, unicode symbols like μ/H₂O) are ignored.
+
+Step 2 — Align and score components within matched pairs (CARRIERS only; extras ignored)
+For each aligned expected–actual formulation pair, align components ONE‑TO‑ONE by chemical identity (role is NOT used for alignment at this step). Only expected carriers are considered for alignment and scoring.
+
+Identity matching rules (apply in order):
+  • If both sides provide agent_id (e.g., InChIKey), require exact equality (case‑insensitive).
+  • Otherwise match by label using common synonyms/abbreviations (case/punctuation/spacing ignored). Examples:
+      “PBS” ≡ “phosphate‑buffered saline”; 
+      “HBSS” ≡ “Hanks’ balanced salt solution”; 
+      “H2O” ≡ “water” ≡ “ddH2O” ≡ “Milli‑Q water”; 
+      “HEPES‑buffered HBSS” ≡ “HB‑HBSS”.
+  • Carrier umbrella strengths and presentation variants are identity‑compatible (e.g., “PBS pH 7.4” ≡ “PBS”, “0.1 M cacodylate buffer” ≡ “cacodylate buffer 0.1M”).
+
+Scoring (carriers only):
+  • True Positive (TP): an expected carrier whose identity is matched in the actual AND whose role in the actual is exactly “CARRIER”.
+  • False Negative (FN): every expected carrier that is not a TP (parent formulation unmatched; or identity not found; or role differs).
+  
+Explicitly ignore for scoring:
+  • All expected non‑carrier components, and any actual components not in E_carriers (no penalties).
+  • Amount values and units (handled only for alignment).
+  • Quotes, notes, component_id, formulation_id, array order.
+
+What to compute:
+  • TP = total number of True Positives over E_carriers.
+  • FN = |E_carriers| − TP.
+  • Recall = TP / (TP + FN) = TP / |E_carriers|.
+
+Edge cases & clarifications:
+  • Extra components in actual (including extra carriers, salts, buffer constituents like HEPES, CaCl₂) NEVER reduce recall.
+  • If expected lacks carriers entirely (|E_carriers| = 0), define Recall = 1.0 by convention.
+  • If expected includes a carrier and actual omits it or assigns a different role, that expected carrier is an FN.
+  • When multiple expected formulations are identical in composition but differ by experiment_id, alignment remains one‑to‑one; experiment_id equality is a strong preference but not mandatory if compositionally identical and unambiguous.
 """
 )

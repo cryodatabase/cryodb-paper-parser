@@ -1,6 +1,7 @@
 import json
 import os
 from typing import Any, Dict, List
+import uuid, pathlib
 from openai import OpenAI
 from pydantic import ValidationError
 from distiller.schemas.papers import Paper
@@ -116,6 +117,40 @@ def update_metadata_from_fulltext(md5_hashes: str | Sequence[str], ocr_response:
     for md5 in md5_hashes:
         paper_id = _update_single_metadata(md5, ocr_response)
     return paper_id
+
+def write_metadata_batch_jsonl(md5_hashes: str | Sequence[str], ocr_response: Any, model: str = "gpt-4o") -> None:
+    """Append batch requests to extract_metadata.jsonl for later OpenAI batch processing."""
+    if isinstance(md5_hashes, str):
+        if md5_hashes is None:
+            return
+        md5_hashes = [md5_hashes]
+
+    batch_path = pathlib.Path("extract_metadata.jsonl")
+
+    for md5 in md5_hashes:
+        # Build full text string
+        paper_fulltext = (
+            ocr_response if isinstance(ocr_response, str) else "\n\n".join(p.markdown for p in ocr_response.pages)
+        )
+        prompt_text = _build_meta_prompt(paper_fulltext)
+
+        request_obj = {
+            "custom_id": f"meta-{md5}",
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": {
+                "model": model,
+                "messages": [
+                    {"role": "user", "content": prompt_text}
+                ],
+                "temperature": 0,
+                "response_format": {"type": "json_object"},
+            },
+        }
+        # Append JSONL line
+        with batch_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(request_obj, ensure_ascii=False) + "\n")
+
 
 def _update_single_metadata(md5_hash: str, ocr_response: Any) -> None:
     paper_fulltext = (

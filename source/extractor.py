@@ -19,9 +19,12 @@ config = PipelineConfig.model_validate_json(json_str)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+
 if not GEMINI_API_KEY:
     raise RuntimeError("Gemini API key not found in .env file.")
-
+langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+if langsmith_api_key is not None:
+    os.environ.setdefault("LANGSMITH_API_KEY", langsmith_api_key)
 genai.configure(api_key=GEMINI_API_KEY)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
