@@ -14,6 +14,8 @@ import boto3
 import logging
 log = logging.getLogger(__name__)
 
+from distiller.utils.llm_extraction import validate_paper as llm_validate_paper
+
 s3 = boto3.client("s3")
 
 _OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -22,6 +24,7 @@ if not _OPENAI_API_KEY:
 client = OpenAI(api_key=_OPENAI_API_KEY)
 
 _S3_TARGET_BUCKET = os.getenv("S3_TARGET_BUCKET")
+print("_S3_TARGET_BUCKET", _S3_TARGET_BUCKET)
 if not _S3_TARGET_BUCKET:
     raise RuntimeError("S3_TARGET_BUCKET not found in environment.")
 
@@ -384,4 +387,19 @@ def get_cpa_facts_from_fulltext(file_md5_hash: str | None = None, limit: int = 1
         print("[TRACE] Paper updated and marked COMPLETED.")
 
     print(f"[TRACE] {done}/{len(rows)} papers updated." if not single_paper else "[TRACE] Done.")
+
+
+def validate_paper(fulltext: str) -> bool:
+    """
+    Validate if a paper contains cryobiology/cryopreservation content relevant to CryoDB.
+    Uses LLM to analyze the paper content and determine relevance.
+    
+    Args:
+        fulltext: The full text content of the paper
+        
+    Returns:
+        bool: True if the paper is valid for CryoDB processing, False otherwise
+    """
+    # Use Claude model for validation as it's more reliable for this type of analysis
+    return llm_validate_paper(fulltext, llm_model="claude-sonnet-4-20250514")
 

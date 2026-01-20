@@ -4,7 +4,7 @@ from distiller.utils.db_utils import hash_in_psql
 from distiller.utils.s3_utils import upload_file_to_s3, upload_fulltext_to_s3
 from distiller.schemas.papers import Paper, PaperStatus
 from distiller.postgres_connection import connection_ctx
-from pipelines.utils.paper_utils import add_paper_to_db, update_metadata_from_fulltext, get_cpa_facts_from_fulltext
+from pipelines.utils.paper_utils import add_paper_to_db, update_metadata_from_fulltext, get_cpa_facts_from_fulltext, validate_paper
 import os
 from datetime import datetime
 from typing import Iterator, Tuple
@@ -22,6 +22,12 @@ def extract_fulltext(files: list[str], source_files: str, config: PipelineConfig
                     continue
                 s3_uri = upload_file_to_s3(file, object_key=f"raw/{file_md5_hash}.pdf")
                 fulltext = extract_text_from_s3(s3_uri)
+                
+                # Validate paper before storing in database
+                if not validate_paper(fulltext):
+                    print(f"[FILTER] Skipping {file} - does not meet CryoDB validation criteria")
+                    continue
+                    
                 fulltext_s3_uri = upload_fulltext_to_s3(fulltext, object_key=f"processed/{file_md5_hash}.txt")
                 
                 if FLAG_BATCH:

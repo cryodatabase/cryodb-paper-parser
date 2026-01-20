@@ -4,7 +4,7 @@ from openai import OpenAI
 from langsmith.wrappers import wrap_openai
 from pydantic import BaseModel, ValidationError
 from distiller.utils.file_utils import clean_json_response
-from distiller.schemas.extraction_passes import AgentPropertyPass, AgentsPass, ExperimentPass, FormulationPass
+from distiller.schemas.extraction_passes import AgentPropertyPass, AgentsPass, ExperimentPass, FormulationPass, ValidationPass
 from anthropic import Anthropic, AsyncAnthropic
 from jinja2 import Environment, FileSystemLoader
 from langsmith.wrappers import wrap_anthropic  # LangSmith tracing wrapper
@@ -132,18 +132,19 @@ def _llm_extract(
                 {"role": "assistant", "content": raw},
                 {"role": "user", "content": feedback},
             ]
-def extract_agents(paper_text: str, llm_model: str, batch: bool = False) -> list[dict] | None:
-    if batch:
-        # we need to focus on generate the jsonl: {"custom_id": "request-1", "method": "POST", "url": "/v1/chat/completions", "body": {"model": "gpt-4o", "messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "What is the capital of France?"}]}}
-        prompt = _jinja.get_template("agent_prompt_batch.j2").render(
-            PAPER_TEXT=paper_text, SCHEMA=AgentsPass.model_json_schema()
-        )
-        
-    else:
-        prompt = _jinja.get_template("agent_prompt.j2").render(
-            PAPER_TEXT=paper_text, SCHEMA=AgentsPass.model_json_schema()
-        )
+def extract_agents(paper_text: str, llm_model: str) -> list[dict] | None:
+    prompt = _jinja.get_template("agent_prompt.j2").render(
+        PAPER_TEXT=paper_text, SCHEMA=AgentsPass.model_json_schema()
+    )
     return _llm_extract(prompt, AgentsPass, model=llm_model)
+
+def validate_paper(paper_text: str, llm_model: str) -> bool:
+    prompt = _jinja.get_template("validation_prompt.j2").render(
+        PAPER_TEXT=paper_text, SCHEMA=ValidationPass.model_json_schema()
+    )
+    result = _llm_extract(prompt, ValidationPass, model=llm_model)
+    print("RESULT : ", result)
+    return result["is_valid"] if result else False
 
 def extract_experiments(paper_text: str, llm_model: str, prompt_to_llm: str | None = None) -> list[dict] | None:
     """Run a single ExperimentPass over the full paper."""

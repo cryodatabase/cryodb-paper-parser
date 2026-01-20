@@ -165,4 +165,13 @@ class AgentPropertyPass(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ValidationPass(BaseModel):
+    """
+    Schema for paper validation - determines if a paper is relevant for CryoDB processing.
+    """
+    is_valid: bool = Field(..., description="Whether this paper contains cryobiology/cryopreservation content relevant to CryoDB")
+    reason: Optional[str] = Field(None, description="Optional reason for validation decision")
+    model_config = ConfigDict(extra="forbid")
+
+
         

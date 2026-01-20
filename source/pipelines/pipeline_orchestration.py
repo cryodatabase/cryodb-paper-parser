@@ -1,5 +1,5 @@
 from pipelines.extract.llama_parse import extract_fulltext as extract_fulltext_llama_parse
-from pipelines.utils.paper_utils import update_metadata_from_fulltext, write_metadata_batch_jsonl
+from pipelines.utils.paper_utils import update_metadata_from_fulltext, write_metadata_batch_jsonl, validate_paper
 from pipelines.utils.pipeline_utils import update_workflow_status
 from pipelines.post_processing.agent_property_ingest import insert_agent_properties
 from pipelines.post_processing.experiment_ingest import insert_experiments
@@ -52,57 +52,53 @@ def run_pipeline(files: list[str], source_files: str, config: PipelineConfig):
             if config.playground_enabled:
                 json_uuid = md5_hash
                 paper_id = update_metadata_from_fulltext(md5_hash, fulltext)
-                agents, llm_res_agents = extract_agents(fulltext, llm_model="o3-2025-04-16")
                 props = extract_agent_properties(fulltext, llm_model="o3-2025-04-16")
                 experiments = extract_experiments(fulltext, llm_model="o3-2025-04-16")
                 formulations = extract_formulations(fulltext, experiments, llm_model="o3-2025-04-16")
 
             else:
-                if FLAG_BATCH:
-                    print("[TRACE] Batch mode enabled")
-                    write_metadata_batch_jsonl(md5_hash, fulltext)
-                else:
-                    with timed("0‑update_metadata"):
-                        paper_id = update_metadata_from_fulltext(md5_hash, fulltext)
-                        if paper_id is None:
-                            print(f"[ERROR] Failed to update metadata for {md5_hash}")
-                            update_workflow_status(md5_hash, PaperStatus.FAILED)
-                            continue
+                with timed("0‑update_metadata"):
+                    paper_id = update_metadata_from_fulltext(md5_hash, fulltext)
+                    if paper_id is None:
+                        print(f"[ERROR] Failed to update metadata for {md5_hash}")
+                        update_workflow_status(md5_hash, PaperStatus.FAILED)
+                        continue
 
-                # ── Agents ───────────────────────────────────────────────
-                    with timed("1‑extract_agents"):
-                        agents = extract_agents(fulltext, llm_model="claude-sonnet-4-20250514", batch=FLAG_BATCH)
-                        if agents is None:
-                            print(f"[ERROR] Failed to extract agents for {md5_hash}")
-                            update_workflow_status(md5_hash, PaperStatus.FAILED)
-                            continue
-                    with timed("1a‑merge_agents"):
-                        agent_rows = agents.get("agents", [])
-                        if agent_rows:
-                            agents_inserted = merge_agents(agent_rows)
-                # ── Agent‑level props ───────────────────────────────────
-                    with timed("2‑extract_agent_props"):
-                        props = extract_agent_properties(fulltext, llm_model="claude-sonnet-4-20250514")
-                    with timed("2a‑insert_agent_props"):
-                        if props:
-                            insert_agent_properties(paper_id, props)
+            # ── Agents ───────────────────────────────────────────────
+                with timed("1‑extract_agents"):
+                    agents = extract_agents(fulltext, llm_model="claude-sonnet-4-20250514")
+                    if agents is None:
+                        print(f"[ERROR] Failed to extract agents for {md5_hash}")
+                        update_workflow_status(md5_hash, PaperStatus.FAILED)
+                        continue
+                with timed("1a‑merge_agents"):
+                    agent_rows = agents.get("agents", [])
+                    if agent_rows:
+                        agents_inserted = merge_agents(agent_rows)
+            # ── Agent‑level props ───────────────────────────────────
+                with timed("2‑extract_agent_props"):
+                    props = extract_agent_properties(fulltext, llm_model="claude-sonnet-4-20250514")
+                with timed("2a‑insert_agent_props"):
+                    if props:
+                        insert_agent_properties(paper_id, props)
 
-                # ── Experiments ─────────────────────────────────────────
-                    with timed("3‑extract_experiments"):
-                        experiments = extract_experiments(fulltext, llm_model="o3-2025-04-16")
-                    with timed("3a‑insert_experiments"):
-                        if experiments is not None:
-                            print(f'[TRACE] experiments: {experiments}')
-                            insert_experiments(md5_hash, experiments)
-                            with timed("4‑extract_formulations"):
-                                formulations = extract_formulations(fulltext, experiments, llm_model="o3-2025-04-16")
-                            with timed("4a‑insert_formulations"):
-                                if formulations:
-                                    print(f'[TRACE] formulations: {formulations}')
-                                    insert_formulations(md5_hash, formulations, experiments)
-                        else:
-                            print(f"[ERROR] Failed to extract experiments for {md5_hash}")
-                            update_workflow_status(md5_hash, PaperStatus.FAILED)
+            # ── Experiments ─────────────────────────────────────────
+                with timed("3‑extract_experiments"):
+                    experiments = extract_experiments(fulltext, llm_model="o3-2025-04-16")
+                with timed("3a‑insert_experiments"):
+                    if experiments is not None:
+                        print(f'[TRACE] experiments: {experiments}')
+                        insert_experiments(md5_hash, experiments)
+                        with timed("4‑extract_formulations"):
+                            formulations = extract_formulations(fulltext, experiments, llm_model="o3-2025-04-16")
+                        with timed("4a‑insert_formulations"):
+                            if formulations:
+                                print(f'[TRACE] formulations: {formulations}')
+                                insert_formulations(md5_hash, formulations, experiments)
+                                update_workflow_status(md5_hash, PaperStatus.COMPLETED)
+                    else:
+                        print(f"[ERROR] Failed to extract experiments for {md5_hash}")
+                        update_workflow_status(md5_hash, PaperStatus.FAILED)
                 
 
     #how to review in the entire config.llm_model_parser list[str]

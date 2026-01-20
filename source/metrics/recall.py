@@ -262,3 +262,32 @@ Edge cases & clarifications:
   • When multiple expected formulations are identical in composition but differ by experiment_id, alignment remains one‑to‑one; experiment_id equality is a strong preference but not mandatory if compositionally identical and unambiguous.
 """
 )
+BOOLEAN_MATCH = GEval(
+    evaluation_params=[LLMTestCaseParams.ACTUAL_OUTPUT, LLMTestCaseParams.EXPECTED_OUTPUT],
+    name="boolean_match",
+    threshold=1.0,
+    criteria="""
+Goal: Return 1 if and only if the actual output and expected output represent the same boolean value; otherwise return 0.
+
+Parameters used: actual output, expected output.
+
+Normalization (apply to both values independently):
+1) If the value is a JSON boolean, keep it as-is.
+2) If the value is a string, trim leading/trailing whitespace and compare case-insensitively.
+3) After normalization, the only valid tokens are: true or false.
+   - Accept the following as TRUE:  true, "true", "True", "TRUE"
+   - Accept the following as FALSE: false, "false", "False", "FALSE"
+4) Any other representation (e.g., "t", "1", "yes", "", null, numbers, objects, arrays) is invalid and is treated as a non-match.
+
+Scoring rule:
+- If both normalized values are valid booleans and equal → Score: 1
+- Otherwise → Score: 0
+
+Output Format:
+You MUST provide your response using the following exact two-line format. Do not add any other text before or after.
+
+Score: [The integer 1 for a match, or the integer 0 for a non-match.]
+
+when reasoning is something like "Both actual and expected outputs are the string 'True' with extra whitespace. After normalization (trimming and lowercasing), both become 'true', which is valid and equal, fully aligning with the evaluation steps." make sure the score is 1.
+"""
+)
