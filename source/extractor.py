@@ -12,12 +12,19 @@ from distiller.pmc.get_cpa_facts import get_cpa_facts_from_papers
 from pipelines.pipeline_orchestration import run_pipeline       
 from distiller.schemas.pipeline_config import PipelineConfig
 import nest_asyncio, asyncio, logging
-nest_asyncio.apply()                  # allows re‑entrancy
+nest_asyncio.apply()
+with open('config.json', 'r') as f:
+    json_str = f.read()
+config = PipelineConfig.model_validate_json(json_str)
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 
 if not GEMINI_API_KEY:
     raise RuntimeError("Gemini API key not found in .env file.")
-
+langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+if langsmith_api_key is not None:
+    os.environ.setdefault("LANGSMITH_API_KEY", langsmith_api_key)
 genai.configure(api_key=GEMINI_API_KEY)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -73,7 +80,7 @@ if __name__ == "__main__":
     if os.path.isdir(input_path):
         pdf_files = list(Path(input_path).glob("*.pdf"))
         if pdf_files:
-            run_pipeline(pdf_files, source_files="local_directory", config=PipelineConfig(distiller="llama_parse", llm_model_parser="claude-sonnet-4-20250514"))
+            run_pipeline(pdf_files, source_files="local_directory", config=config)
             exit(0)
         else:
             print(f"No PDF files found in directory '{input_path}'.")

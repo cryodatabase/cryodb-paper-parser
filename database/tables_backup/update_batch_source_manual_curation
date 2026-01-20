@@ -1,0 +1,31 @@
+-- Add source and batch_id columns to cpa_chemicals
+ALTER TABLE cpa_chemicals
+ADD COLUMN source VARCHAR(10) DEFAULT 'distiller' CHECK (source IN ('distiller', 'manual')),
+ADD COLUMN batch_id INTEGER;
+
+-- Add source and batch_id columns to cpa_chemical_aliases
+ALTER TABLE cpa_chemical_aliases
+ADD COLUMN source VARCHAR(10) DEFAULT 'distiller' CHECK (source IN ('distiller', 'manual')),
+ADD COLUMN batch_id INTEGER;
+
+-- Add source and batch_id columns to chemical_properties
+ALTER TABLE chemical_properties
+ADD COLUMN source VARCHAR(10) DEFAULT 'distiller' CHECK (source IN ('distiller', 'manual')),
+ADD COLUMN batch_id INTEGER;
+
+-- Add source and batch_id columns to chemical_property_values
+ALTER TABLE chemical_property_values
+ADD COLUMN source VARCHAR(10) DEFAULT 'distiller' CHECK (source IN ('distiller', 'manual')),
+ADD COLUMN batch_id INTEGER;
+
+-- Add source and batch_id columns to cpa_references
+ALTER TABLE cpa_references
+ADD COLUMN source VARCHAR(10) DEFAULT 'distiller' CHECK (source IN ('distiller', 'manual')),
+ADD COLUMN batch_id INTEGER;
+
+-- Set existing data to batch_id=1
+UPDATE cpa_chemicals SET batch_id = 1 WHERE batch_id IS NULL;
+UPDATE cpa_chemical_aliases SET batch_id = 1 WHERE batch_id IS NULL;
+UPDATE chemical_properties SET batch_id = 1 WHERE batch_id IS NULL;
+UPDATE chemical_property_values SET batch_id = 1 WHERE batch_id IS NULL;
+UPDATE cpa_references SET batch_id = 1 WHERE batch_id IS NULL;

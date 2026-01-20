@@ -24,6 +24,10 @@ dependencies = [
     "ragas (>=0.3.0,<0.4.0)",
     "langchain-openai (>=0.3.28,<0.4.0)",
     "langchain-anthropic (>=0.3.18,<0.4.0)",
+    "datasets (>=4.0.0,<5.0.0)",
+    "deepeval (>=3.3.6,<4.0.0)",
+    "pytest-timeout (>=2.4.0,<3.0.0)",
+    "langsmith (>=0.1.9,<1.0.0)",
 ]
 
 

@@ -18,14 +18,15 @@ def insert_experiments(paper_md5: str, experiments: List[Dict[str, Any]]) -> Non
         paper_uuid = _paper_uuid_from_md5(cur, paper_md5)
         if paper_uuid is None:
             raise RuntimeError(f"No `papers` row for md5={paper_md5}")
-
+        print("EXPERIMENTS: ", experiments)
         rows = [
             (
                 paper_uuid,
                 e.get("id"),
                 e.get("performed_in_this_paper", True),
                 e.get("label"),
-                e.get("method"),
+                e.get("cooling_method"),
+                e.get("rewarming_method"),
                 Json(e["biological_context"]) if e.get("biological_context") else None,
                 e["quote"],
             )
@@ -35,9 +36,9 @@ def insert_experiments(paper_md5: str, experiments: List[Dict[str, Any]]) -> Non
         cur.executemany(
             """
             INSERT INTO experiments
-                (paper_id, local_id, performed_in_this_paper, label, method,
+                (paper_id, local_id, performed_in_this_paper, label, cooling_method, rewarming_method,
                 biological_context, quote)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT DO NOTHING;
             """,
             rows,

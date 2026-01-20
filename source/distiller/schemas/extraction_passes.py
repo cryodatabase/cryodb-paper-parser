@@ -71,7 +71,6 @@ class MoleculeCoreData(BaseModel):
     preferred_name: str
     synonyms: List[str] = Field(default_factory=list)
     role: ChemicalRole
-
     model_config = ConfigDict(extra="forbid")
 
     # ── validation ──────────────────────────────────────────────
@@ -102,8 +101,9 @@ class ExperimentItem(BaseModel):
     id: str = Field(..., description="Deterministic ID (e.g. 'EXPT‑003').")
     performed_in_this_paper: bool = True
     label: Optional[str] = None
-    method: Optional[str] = None
-    biological_context: Optional[SampleContext] = None
+    cooling_method: Optional[str] = None
+    rewarming_method: Optional[str] = None
+    biological_context: SampleContext = None
     quote: str
     source_chunk        : List[str] = Field(default_factory=list, description="The source chunk of the experiment. It must be exact extracted from the paper, and fragmented if needed to include all numeric values. Minimum length is 1000 words")
     model_config = ConfigDict(extra="forbid")
@@ -126,8 +126,6 @@ class FormulationPass(BaseModel):
     Re‑uses the `Formulation` model defined in distiller.schemas.structured_output.
     """
     formulations: List[Formulation]
-
-    # forbid arbitrary extra keys, just like your other passes
     model_config = ConfigDict(extra="forbid")
 # ────────────────────────────────────────────────────────────────
 # 4.  Intrinsic physicochemical properties – AgentProperty
@@ -163,9 +161,16 @@ class AgentPropertyPass(BaseModel):
     One JSON envelope per paper – list of intrinsic properties
     for the chemicals that appeared in `MoleculeCoreData`.
     """
-
     properties: List[AgentProperty]
+    model_config = ConfigDict(extra="forbid")
 
+
+class ValidationPass(BaseModel):
+    """
+    Schema for paper validation - determines if a paper is relevant for CryoDB processing.
+    """
+    is_valid: bool = Field(..., description="Whether this paper contains cryobiology/cryopreservation content relevant to CryoDB")
+    reason: Optional[str] = Field(None, description="Optional reason for validation decision")
     model_config = ConfigDict(extra="forbid")
 
 

@@ -1,6 +1,7 @@
 import json
 import os
 from typing import Any, Dict, List
+import uuid, pathlib
 from openai import OpenAI
 from pydantic import ValidationError
 from distiller.schemas.papers import Paper
@@ -13,6 +14,8 @@ import boto3
 import logging
 log = logging.getLogger(__name__)
 
+from distiller.utils.llm_extraction import validate_paper as llm_validate_paper
+
 s3 = boto3.client("s3")
 
 _OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -21,6 +24,7 @@ if not _OPENAI_API_KEY:
 client = OpenAI(api_key=_OPENAI_API_KEY)
 
 _S3_TARGET_BUCKET = os.getenv("S3_TARGET_BUCKET")
+print("_S3_TARGET_BUCKET", _S3_TARGET_BUCKET)
 if not _S3_TARGET_BUCKET:
     raise RuntimeError("S3_TARGET_BUCKET not found in environment.")
 
@@ -109,11 +113,47 @@ def _extract_metadata(fulltext: str) -> Dict[str, Any] | None:
 
 def update_metadata_from_fulltext(md5_hashes: str | Sequence[str], ocr_response: Any) -> None:
     if isinstance(md5_hashes, str):
+        if md5_hashes is None:
+            return None
         md5_hashes = [md5_hashes]
 
     for md5 in md5_hashes:
         paper_id = _update_single_metadata(md5, ocr_response)
     return paper_id
+
+def write_metadata_batch_jsonl(md5_hashes: str | Sequence[str], ocr_response: Any, model: str = "gpt-4o") -> None:
+    """Append batch requests to extract_metadata.jsonl for later OpenAI batch processing."""
+    if isinstance(md5_hashes, str):
+        if md5_hashes is None:
+            return
+        md5_hashes = [md5_hashes]
+
+    batch_path = pathlib.Path("extract_metadata.jsonl")
+
+    for md5 in md5_hashes:
+        # Build full text string
+        paper_fulltext = (
+            ocr_response if isinstance(ocr_response, str) else "\n\n".join(p.markdown for p in ocr_response.pages)
+        )
+        prompt_text = _build_meta_prompt(paper_fulltext)
+
+        request_obj = {
+            "custom_id": f"meta-{md5}",
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": {
+                "model": model,
+                "messages": [
+                    {"role": "user", "content": prompt_text}
+                ],
+                "temperature": 0,
+                "response_format": {"type": "json_object"},
+            },
+        }
+        # Append JSONL line
+        with batch_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(request_obj, ensure_ascii=False) + "\n")
+
 
 def _update_single_metadata(md5_hash: str, ocr_response: Any) -> None:
     paper_fulltext = (
@@ -186,10 +226,11 @@ def add_paper_to_db(paper: Paper, cur):
                         source,
                         created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id;
                     """,
                     (
-                        paper.md5_hash.strip(),
+                        paper.md5_hash,
                         paper.file_s3_uri,
                         paper.fulltext_s3_uri,
                         paper.file_size_bytes,
@@ -198,7 +239,7 @@ def add_paper_to_db(paper: Paper, cur):
                         paper.created_at,
                     ),
                 )
-
+    return cur.fetchone()[0]
 
 
 def _stream_s3_text(uri: str) -> str:
@@ -346,4 +387,19 @@ def get_cpa_facts_from_fulltext(file_md5_hash: str | None = None, limit: int = 1
         print("[TRACE] Paper updated and marked COMPLETED.")
 
     print(f"[TRACE] {done}/{len(rows)} papers updated." if not single_paper else "[TRACE] Done.")
+
+
+def validate_paper(fulltext: str) -> bool:
+    """
+    Validate if a paper contains cryobiology/cryopreservation content relevant to CryoDB.
+    Uses LLM to analyze the paper content and determine relevance.
+    
+    Args:
+        fulltext: The full text content of the paper
+        
+    Returns:
+        bool: True if the paper is valid for CryoDB processing, False otherwise
+    """
+    # Use Claude model for validation as it's more reliable for this type of analysis
+    return llm_validate_paper(fulltext, llm_model="claude-sonnet-4-20250514")
 

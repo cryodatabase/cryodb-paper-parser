@@ -124,3 +124,32 @@ GROUP BY chemical_id, preferred_name, role, prop_type;
 --                v_cpa_property_values,
 --                v_cpa_properties
 --    TO cryo_reader;
+
+
+ SELECT p.id AS paper_id,
+    e.id AS experiment_id,
+    e.label AS experiment_label,
+    e.cooling_method,
+    e.rewarming_method,
+    e.biological_context,
+    e.quote AS experiment_quote,
+    f.id AS formulation_id,
+    f.label AS formulation_label,
+    f.quote AS formulation_quote,
+    fc.id AS component_id,
+    fc.role AS component_role,
+    fc.amount,
+    fc.unit,
+    fc.quote AS component_quote,
+    fc.note,
+    chem.id AS chemical_id,
+    chem.preferred_name AS chemical_preferred_name,
+    chem.role AS chemical_role,
+    ca.id AS alias_id,
+    ca.alias AS alias_label
+   FROM papers p
+     JOIN experiments e ON e.paper_id = p.id AND e.performed_in_this_paper
+     LEFT JOIN formulations f ON f.experiment_id = e.id
+     LEFT JOIN formulation_components fc ON fc.formulation_id = f.id
+     LEFT JOIN cpa_chemicals chem ON chem.id = fc.chemical_id
+     LEFT JOIN cpa_chemical_aliases ca ON ca.id = fc.alias_id;
